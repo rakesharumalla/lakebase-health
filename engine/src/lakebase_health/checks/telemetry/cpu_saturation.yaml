@@ -1,0 +1,23 @@
+id: cpu_saturation
+title: "CPU saturated (p95 over 24 h)"
+category: capacity
+source: delta
+thresholds: {warning: 70, critical: 85}
+explain: >
+  p95 of CPU used versus the compute's logical CPUs over the last 24 hours. Sustained high CPU slows every query.
+  Fix the top CPU queries first (see top_db_time_query); if CPU is pinned at the autoscaling maximum, raise max CU.
+sql: |
+  WITH c AS (
+    SELECT project_id, branch_id, endpoint_id, compute_id, ts,
+           host_cpu_seconds / NULLIF(timestampdiff(MILLISECOND, previous_ts, ts) / 1000.0, 0) AS cores_used
+    FROM system.lakebase.compute_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS),
+  g AS (
+    SELECT compute_id, date_trunc('MINUTE', ts) AS m, max(host_logical_cpus) AS cpus
+    FROM system.lakebase.compute_gauges WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+    GROUP BY compute_id, date_trunc('MINUTE', ts))
+  SELECT c.project_id, c.branch_id, c.endpoint_id, c.endpoint_id AS object,
+         100 * percentile_approx(c.cores_used / NULLIF(g.cpus, 0), 0.95) AS measure,
+         100 * max(c.cores_used / NULLIF(g.cpus, 0)) AS max_cpu_pct
+  FROM c JOIN g ON c.compute_id = g.compute_id AND date_trunc('MINUTE', c.ts) = g.m
+  GROUP BY c.project_id, c.branch_id, c.endpoint_id
+fix: {kind: manual, template: "Optimize the top CPU queries, or raise autoscaling_limit_max_cu on {object}.", risk: moderate}

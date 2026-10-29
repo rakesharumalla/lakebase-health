@@ -1,0 +1,16 @@
+id: long_transaction
+title: "Long-running transaction"
+category: incidents
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 300, critical: 1800}
+explain: >
+  An active transaction open for more than 5 minutes (seconds). Long transactions hold locks and block vacuum.
+  Set statement_timeout for application roles and split long batch jobs.
+sql: |
+  SELECT 'pid ' || pid AS object, pid, usename, application_name, wait_event_type, wait_event,
+         extract(epoch FROM now() - xact_start)::float8 AS measure, left(query, 200) AS query_text
+  FROM pg_stat_activity
+  WHERE backend_type = 'client backend' AND xact_start IS NOT NULL AND state = 'active'
+    AND pid <> pg_backend_pid() AND usename NOT IN {excluded_users}
+fix: {kind: manual, template: "Investigate pid {pid}; cancel with SELECT pg_cancel_backend({pid}); if safe.", risk: high}

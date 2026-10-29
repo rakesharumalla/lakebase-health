@@ -1,0 +1,16 @@
+id: replica_lag
+title: "Read replica lags behind the primary"
+category: replication
+source: delta
+thresholds: {warning: 1, critical: 30}
+explain: >
+  p95 replication lag in seconds for read replicas over 24 h. Size the replica like the primary, shorten
+  long replica queries, and smooth bulk writes on the primary.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         percentile_approx(replication_lag_time_ms, 0.95) / 1000.0 AS measure,
+         max(replication_lag_bytes) AS max_lag_bytes
+  FROM system.lakebase.compute_gauges
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND compute_mode <> 'primary'
+    AND replication_lag_time_ms IS NOT NULL
+  GROUP BY project_id, branch_id, endpoint_id

@@ -1,0 +1,29 @@
+id: duplicate_index
+title: "Duplicate index"
+category: indexing
+source: postgres
+thresholds: {warning: 0, critical: 1073741824}
+explain: >
+  Two or more indexes with identical table, columns, operator classes, expressions and predicate. Keep one (unique
+  and primary-key indexes are always kept) and drop the rest.
+sql: |
+  WITH d AS (
+    SELECT i.indexrelid, i.indisunique, i.indisprimary,
+           i.indrelid::text || '|' || i.indclass::text || '|' || i.indkey::text || '|' ||
+           coalesce(i.indexprs::text, '') || '|' || coalesce(i.indpred::text, '') AS sig,
+           quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS ident, n.nspname
+    FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname NOT IN {excluded_schemas}),
+  r AS (SELECT d.*, row_number() OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS rn,
+               first_value(ident) OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS kept
+        FROM d)
+  SELECT ident AS object, ident AS index_ident, kept AS kept_index,
+         pg_relation_size(indexrelid)::float8 AS measure, pg_get_indexdef(indexrelid) AS index_def
+  FROM r WHERE rn > 1 AND NOT indisunique AND NOT indisprimary
+fix:
+  kind: ddl
+  template: "DROP INDEX CONCURRENTLY {index_ident};"
+  rollback: "{index_def_concurrently};"
+  risk: high
+  reversible: true
+  verify_on_branch: true

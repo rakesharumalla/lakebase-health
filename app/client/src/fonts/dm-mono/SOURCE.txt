@@ -1,0 +1,1 @@
+Vendored from @fontsource/dm-mono 5.3.0 (latin 400-500, SIL OFL 1.1): the Databricks Apps npm proxy does not serve that package.

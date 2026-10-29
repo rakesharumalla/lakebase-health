@@ -1,0 +1,14 @@
+id: auth_failures
+title: "Repeated authentication failures"
+category: security
+source: delta
+thresholds: {warning: 5, critical: 50}
+explain: >
+  Failed logins (28P01, 28000) per user in the last 24 h. Check for expired OAuth tokens in clients, or for
+  password guessing against roles with native passwords.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || coalesce(usename, '?') AS object,
+         count(*) AS measure, max(ts) AS last_seen
+  FROM system.lakebase.postgres_logs
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND sqlstate IN ('28P01', '28000')
+  GROUP BY project_id, branch_id, endpoint_id, usename

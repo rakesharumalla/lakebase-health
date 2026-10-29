@@ -1,0 +1,26 @@
+id: disk_spill
+title: "Query spills sorts or hashes to disk"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 0, critical: 100}
+explain: >
+  Executions in the last 24 h whose plan sorted on disk or used more than one hash batch, per query and role.
+  Raise work_mem for that role (not globally), or add an index that delivers the sort order.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) || '@' || usename AS object, CAST(queryid AS STRING) AS queryid, usename,
+         concat('"', replace(usename, '"', '""'), '"') AS role_ident, max(query_text) AS query_text,
+         count(*) AS measure, max(temp_blks_written) AS max_temp_blks,
+         max(CASE WHEN plan_json RLIKE '"Sort Space Type":\\s*"Disk"' THEN 1 ELSE 0 END) AS disk_sort,
+         max(CASE WHEN plan_json RLIKE '"Hash Batches":\\s*([2-9]|[1-9][0-9]+)' THEN 1 ELSE 0 END) AS hash_spill
+  FROM system.lakebase.plan_history
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled AND usename IS NOT NULL
+    AND (plan_json RLIKE '"Sort Space Type":\\s*"Disk"' OR plan_json RLIKE '"Hash Batches":\\s*([2-9]|[1-9][0-9]+)')
+  GROUP BY project_id, branch_id, endpoint_id, queryid, usename
+fix:
+  kind: setting
+  template: "ALTER ROLE {role_ident} SET work_mem = '64MB';"
+  rollback: "ALTER ROLE {role_ident} RESET work_mem;"
+  risk: moderate
+  reversible: true
+  verify_on_branch: true

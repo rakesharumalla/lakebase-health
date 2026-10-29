@@ -1,0 +1,27 @@
+resources:
+  apps:
+    lakebase_health_app:
+      name: lakebase-health
+      description: Read-only Lakebase health findings, evidence and incident timeline
+      source_code_path: ../app
+      user_api_scopes: [sql, postgres]
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+      config:
+        command: ["npm", "run", "start"]
+        env:
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: CATALOG
+            value: ${var.catalog}
+          - name: SCHEDULE_MINUTES  # the engine's ingest interval: the stale banner shows after twice this
+            value: ${var.ingest_interval_minutes}
+          - name: PII_MASKING
+            value: ${var.pii_masking}
+          - name: FIXER_JOB_ID
+            value: ${resources.jobs.lakebase_health_fixer.id}
+      lifecycle:
+        started: true

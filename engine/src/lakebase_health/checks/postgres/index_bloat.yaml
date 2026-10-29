@@ -1,0 +1,26 @@
+id: index_bloat
+title: "B-tree index bloat"
+category: maintenance
+source: postgres
+schedule: daily
+requires_extension: pgstattuple
+direction: below
+thresholds: {warning: 70, critical: 50}
+explain: >
+  Average leaf density of B-tree indexes over 100 MB (pgstatindex; daily). A fresh B-tree is about 90% dense.
+  Rebuild online with REINDEX INDEX CONCURRENTLY.
+sql: |
+  SELECT quote_ident(s.schemaname) || '.' || quote_ident(s.indexrelname) AS object,
+         quote_ident(s.schemaname) || '.' || quote_ident(s.indexrelname) AS index_ident,
+         pg_relation_size(s.indexrelid)::float8 AS index_bytes, x.leaf_fragmentation::float8 AS leaf_fragmentation,
+         x.avg_leaf_density::float8 AS measure
+  FROM pg_stat_user_indexes s
+  JOIN pg_class c ON c.oid = s.indexrelid JOIN pg_am am ON am.oid = c.relam AND am.amname = 'btree'
+  CROSS JOIN LATERAL pgstatindex(s.indexrelid) x
+  WHERE pg_relation_size(s.indexrelid) > 104857600 AND s.schemaname NOT IN {excluded_schemas}
+fix:
+  kind: ddl
+  template: "REINDEX INDEX CONCURRENTLY {index_ident};"
+  rollback_note: "Not needed: REINDEX rebuilds the same index and changes no data"
+  risk: moderate
+  reversible: true

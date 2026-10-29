@@ -1,0 +1,19 @@
+id: lock_wait_share
+title: "Lock waits are a large share of wait time"
+category: incidents
+source: delta
+thresholds: {warning: 10, critical: 25}
+explain: >
+  Share of wait time in the Lock class (24 h), excluding client think-time and platform background waits
+  (Activity, Extension:Neon*). See blocked_session and missing_fk_index.
+sql: |
+  WITH w AS (
+    SELECT project_id, branch_id, endpoint_id, wait_class_name, sum(wait_event_time) AS t
+    FROM system.lakebase.wait_event_counters
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND wait_class_name NOT IN ('Activity', 'Client')
+      AND NOT (wait_class_name = 'Extension' AND wait_event_name RLIKE '^Neon')
+    GROUP BY project_id, branch_id, endpoint_id, wait_class_name)
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         100.0 * sum(CASE WHEN wait_class_name = 'Lock' THEN t ELSE 0 END) / NULLIF(sum(t), 0) AS measure,
+         sum(t) AS total_wait_s
+  FROM w GROUP BY project_id, branch_id, endpoint_id HAVING sum(t) > 60

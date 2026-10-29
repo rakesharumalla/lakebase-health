@@ -1,0 +1,78 @@
+import re
+from contextlib import contextmanager
+
+from ..executors.postgres import SEARCH_PATH_SQL
+from .allowlist import IDENT, parse
+
+LONG = {"create_index", "drop_index"}
+
+
+def FIXER_SETUP(kind: str) -> tuple:
+    return (SEARCH_PATH_SQL, "SET lock_timeout = '5s'",
+            f"SET statement_timeout = '{'2h' if kind in LONG else '10min'}'")
+
+
+CREDENTIAL_DENIED = "credential_denied"
+
+
+class CredentialDenied(Exception):
+    """The fixer may not generate a Postgres credential for the endpoint (not enrolled on the project)."""
+    sqlstate = CREDENTIAL_DENIED
+
+
+class FixerPg:
+    def __init__(self, w, user: str, connect=None):
+        self.w, self.user = w, user
+        if connect is None:
+            import psycopg
+            connect = psycopg.connect
+        self.connect = connect
+
+    @contextmanager
+    def session(self, endpoint_name: str, host: str, database: str, kind: str):
+        from databricks.sdk.errors import PermissionDenied
+        try:
+            token = self.w.postgres.generate_database_credential(endpoint=endpoint_name).token
+        except PermissionDenied as e:
+            raise CredentialDenied() from e
+        conn = self.connect(host=host, user=self.user, password=token, dbname=database, sslmode="require",
+                            autocommit=True, application_name="lakebase-health-fixer", connect_timeout=10,
+                            prepare_threshold=None)  # the endpoint does not keep auto-prepared statements
+        try:
+            for stmt in FIXER_SETUP(kind):
+                conn.execute(stmt)
+            yield conn
+        finally:
+            conn.close()
+
+
+def index_state(conn, qualified_index: str) -> str:
+    row = conn.execute("SELECT i.indisvalid FROM pg_index i WHERE i.indexrelid = to_regclass(%s)",
+                       (qualified_index,)).fetchone()
+    if not row:
+        return "absent"
+    return "valid" if row[0] else "invalid"
+
+
+def fixer_index_name(action_id: str) -> str:
+    return "lbh_" + action_id[:12].lower()
+
+
+_CREATE_HEAD = re.compile(r"^CREATE\s+INDEX\s+CONCURRENTLY\s+(?:IF\s+NOT\s+EXISTS\s+)?", re.I | re.A)
+_SCHEMA = re.compile(rf"^({IDENT})\.{IDENT}$", re.A)
+
+
+def with_index_name(sql: str, schema_qualified_table: str, action_id: str) -> tuple:
+    """Pins the index name a CREATE INDEX CONCURRENTLY will produce, so recovery can find exactly that index."""
+    if parse(sql).kind != "create_index":
+        raise ValueError("with_index_name only accepts CREATE INDEX CONCURRENTLY statements")
+    s = sql.strip()
+    head = _CREATE_HEAD.match(s)
+    rest = s[head.end():]
+    schema = _SCHEMA.match(schema_qualified_table)
+    prefix = f"{schema.group(1)}." if schema else ""
+    if re.match(r"ON\s", rest, re.I):
+        name = fixer_index_name(action_id)
+        return f"{s[:head.end()]}{name} {rest}", prefix + name
+    name = re.match(IDENT, rest).group(0)
+    return s, prefix + name

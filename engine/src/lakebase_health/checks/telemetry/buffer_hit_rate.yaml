@@ -1,0 +1,18 @@
+id: buffer_hit_rate
+title: "Postgres buffer cache hit rate low"
+category: capacity
+source: delta
+direction: below
+superseded_by:   # a low LFC hit rate on the endpoint is the real cache problem; shared_buffers is only the first tier
+  key: endpoint
+  checks: [lfc_hit_rate]
+thresholds: {info: 95, warning: 90}
+explain: >
+  shared_buffers hit ratio per database (24 h). On Lakebase this is only the first cache tier in front of the
+  local SSD cache, so judge lfc_hit_rate first; a low value here is informational unless the LFC rate is also low.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object,
+         100.0 * sum(shared_blks_hit) / NULLIF(sum(shared_blks_hit) + sum(shared_blks_read), 0) AS measure
+  FROM system.lakebase.database_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, datname
+  HAVING sum(shared_blks_hit) + sum(shared_blks_read) > 10000

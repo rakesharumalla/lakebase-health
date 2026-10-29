@@ -1,0 +1,21 @@
+id: top_db_time_query
+title: "One query dominates database time"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 25, critical: 50}
+explain: >
+  Share of the endpoint's total execution time spent in one normalized query (24 h, at least 60 s total). Optimize
+  it first: check its plan (disk_spill, row_misestimate) and indexes (seq_scan_heavy, missing_fk_index).
+sql: |
+  WITH q AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, max(query) AS query_text, sum(calls) AS calls,
+           sum(total_exec_time) AS total_ms, sum(temp_blks_written) AS temp_blks_written
+    FROM system.lakebase.pg_stat_statements_counters
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND toplevel
+    GROUP BY project_id, branch_id, endpoint_id, queryid)
+  SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, query_text, calls,
+         total_ms / NULLIF(calls, 0) AS mean_ms, temp_blks_written,
+         100.0 * total_ms / NULLIF(sum(total_ms) OVER (PARTITION BY endpoint_id), 0) AS measure
+  FROM q
+  QUALIFY total_ms > 60000

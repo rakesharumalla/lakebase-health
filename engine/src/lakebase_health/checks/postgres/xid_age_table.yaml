@@ -1,0 +1,19 @@
+id: xid_age_table
+title: "Table with old unfrozen transaction IDs"
+category: maintenance
+source: postgres
+thresholds: {warning: 200000000, critical: 1000000000}
+explain: >
+  age(relfrozenxid) of a table above 100M. Freeze the oldest tables first; remove freeze blockers if age keeps rising.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS table_ident,
+         age(c.relfrozenxid)::float8 AS measure, mxid_age(c.relminmxid)::float8 AS mxid_age
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind IN ('r', 'm') AND n.nspname NOT IN {excluded_schemas} AND age(c.relfrozenxid) > 100000000
+fix:
+  kind: ddl
+  template: "VACUUM (FREEZE) {table_ident};"
+  rollback_note: "Not needed: VACUUM FREEZE changes no data"
+  risk: safe
+  reversible: true

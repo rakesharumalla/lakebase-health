@@ -1,0 +1,15 @@
+id: storage_utilization
+title: "Storage near its limit"
+category: capacity
+source: delta
+thresholds: {warning: 70, critical: 85}
+explain: >
+  Used storage as a share of the limit (latest reading, 24 h). Write performance drops at the quota. Drop unused
+  or duplicate indexes, reclaim bloat, archive cold data, or shorten the restore window.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         100.0 * max_by(total_size, ts) / NULLIF(max_by(total_size_limit, ts), 0) AS measure,
+         max_by(total_size, ts) AS used_bytes, max_by(total_size_limit, ts) AS limit_bytes
+  FROM system.lakebase.compute_gauges
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND total_size IS NOT NULL
+  GROUP BY project_id, branch_id, endpoint_id

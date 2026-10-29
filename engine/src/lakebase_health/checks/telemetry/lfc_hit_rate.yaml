@@ -1,0 +1,17 @@
+id: lfc_hit_rate
+title: "Local SSD cache hit rate below 99%"
+category: capacity
+source: delta
+direction: below
+thresholds: {warning: 99, critical: 95}
+explain: >
+  Share of page reads served from the compute's local file cache instead of remote storage (24 h). OLTP needs 99%+.
+  If the working set exceeds the cache, raise min CU (the cache follows the current size) or reduce pages read.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         100.0 * sum(lfc_hits) / NULLIF(sum(lfc_hits) + sum(lfc_misses), 0) AS measure,
+         sum(lfc_hits) AS hits, sum(lfc_misses) AS misses
+  FROM system.lakebase.compute_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id
+  HAVING sum(lfc_hits) + sum(lfc_misses) > 10000
+fix: {kind: manual, template: "Raise min CU on {object} or index the queries reading the most pages.", risk: moderate}

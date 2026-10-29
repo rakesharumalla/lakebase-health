@@ -1,0 +1,22 @@
+id: stale_statistics
+title: "Table statistics are missing or stale"
+category: performance
+source: postgres
+thresholds: {warning: 20, critical: 100}
+explain: >
+  Rows modified since the last ANALYZE as a share of live rows (100 when never analyzed). Stale statistics give
+  the planner bad row estimates. Run ANALYZE; it is cheap and safe.
+sql: |
+  SELECT quote_ident(schemaname) || '.' || quote_ident(relname) AS object,
+         quote_ident(schemaname) || '.' || quote_ident(relname) AS table_ident,
+         n_live_tup, n_mod_since_analyze, last_analyze, last_autoanalyze,
+         (CASE WHEN last_analyze IS NULL AND last_autoanalyze IS NULL THEN 100.0
+               ELSE 100.0 * n_mod_since_analyze / NULLIF(n_live_tup, 0) END)::float8 AS measure
+  FROM pg_stat_user_tables
+  WHERE n_live_tup > 1000 AND schemaname NOT IN {excluded_schemas}
+fix:
+  kind: ddl
+  template: "ANALYZE {table_ident};"
+  rollback_note: "Not needed: ANALYZE only refreshes planner statistics"
+  risk: safe
+  reversible: true

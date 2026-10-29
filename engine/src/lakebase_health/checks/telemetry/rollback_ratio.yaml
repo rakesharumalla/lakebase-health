@@ -1,0 +1,15 @@
+id: rollback_ratio
+title: "High transaction rollback ratio"
+category: throughput
+source: delta
+thresholds: {warning: 1, critical: 5}
+explain: >
+  Share of transactions rolled back per database (24 h). Look up the cause in postgres_errors: serialization
+  failures, deadlocks, constraint violations, or ORMs rolling back read-only transactions.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object,
+         100.0 * sum(xact_rollback) / NULLIF(sum(xact_commit) + sum(xact_rollback), 0) AS measure,
+         (sum(xact_commit) + sum(xact_rollback)) / NULLIF(sum(timestampdiff(SECOND, previous_ts, ts)), 0) AS avg_tps
+  FROM system.lakebase.database_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, datname
+  HAVING sum(xact_commit) + sum(xact_rollback) > 1000

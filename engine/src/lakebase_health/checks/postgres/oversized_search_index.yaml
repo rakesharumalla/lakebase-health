@@ -1,0 +1,28 @@
+id: oversized_search_index
+title: "Large GIN/GiST search index"
+category: indexing
+source: postgres
+thresholds: {warning: 1073741824, critical: 10737418240}
+explain: >
+  GIN or GiST index of 1 GB or more (measure = bytes). Every insert and update re-indexes the indexed text, so a
+  search index over a whole document (for example a trigram index on value::text) costs write latency, storage,
+  vacuum time and cache. If searches are always scoped (one user or tenant), a B-tree on the scope key plus
+  filtering those rows is often enough: check idx_scan on every compute and EXPLAIN (ANALYZE, BUFFERS) for the
+  largest scopes on a branch. If a search index is needed, index only the searched text, put the scope key in it
+  (btree_gin), and prefer full-text search (tsvector) over trigrams when word matching is enough.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS index_ident, t.relname AS table_name,
+         a.amname AS access_method, (i.indexprs IS NOT NULL) AS is_expression, s.idx_scan,
+         pg_relation_size(c.oid)::float8 AS measure, pg_total_relation_size(t.oid)::float8 AS table_total_bytes,
+         pg_get_indexdef(c.oid) AS index_def
+  FROM pg_index i
+  JOIN pg_class c ON c.oid = i.indexrelid
+  JOIN pg_am a ON a.oid = c.relam AND a.amname IN ('gin', 'gist')
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_class t ON t.oid = i.indrelid
+  LEFT JOIN pg_stat_user_indexes s ON s.indexrelid = c.oid
+  WHERE n.nspname NOT IN {excluded_schemas} AND pg_relation_size(c.oid) >= 268435456
+fix:
+  kind: manual
+  risk: safe

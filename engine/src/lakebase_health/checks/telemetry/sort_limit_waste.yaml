@@ -1,0 +1,24 @@
+id: sort_limit_waste
+title: "Sort reads far more rows than the LIMIT returns"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 10, critical: 1000}
+explain: >
+  For plans topped by Limit with a Sort beneath, the largest row count read by a plan node divided by the rows the
+  LIMIT returned (24 h). An index matching ORDER BY lets Postgres stop early instead of sorting everything.
+sql: |
+  WITH s AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, query_text,
+           regexp_extract_all(plan_json, '"Node Type":\\s*"([^"]+)"', 1) AS types,
+           transform(regexp_extract_all(plan_json, '"Actual Rows":\\s*([0-9.]+)', 1), x -> try_cast(x AS DOUBLE)) AS rws
+    FROM system.lakebase.plan_history
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled)
+  SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
+         count(*) AS execs, max(array_max(rws)) AS max_rows_read, max(try_element_at(rws, 1)) AS limit_rows,
+         max(array_max(rws) / greatest(try_element_at(rws, 1), 1)) AS measure
+  FROM s
+  WHERE try_element_at(types, 1) = 'Limit'
+    AND (array_contains(slice(types, 2, 3), 'Sort') OR array_contains(slice(types, 2, 3), 'Incremental Sort'))
+  GROUP BY project_id, branch_id, endpoint_id, queryid
+fix: {kind: manual, template: "Create an index matching the ORDER BY of query {object}, verified on a branch.", risk: moderate}

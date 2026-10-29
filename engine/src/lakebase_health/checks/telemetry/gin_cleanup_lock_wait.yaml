@@ -1,0 +1,22 @@
+id: gin_cleanup_lock_wait
+title: "Writes wait for a GIN pending-list cleanup"
+category: incidents
+source: delta
+thresholds: {warning: 60, critical: 600}
+explain: >
+  Total seconds sessions waited on page locks in the last 24 hours (avg_wait_s per wait). On Lakebase this is the
+  GIN pending-list cleanup lock: with fastupdate on, a write that finds the pending list over
+  gin_pending_list_limit merges it into the index itself, and other writers queue behind it. See gin_pending_list
+  for the index. Options, cheapest first: drop the index if it is unused on every compute; index only the text you
+  search (and scope it, e.g. by tenant prefix with btree_gin); run gin_clean_pending_list on a schedule from one
+  worker with a short lock_timeout; or set fastupdate = off so each write pays only for its own entries.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, sum(wait_event_time) AS measure,
+         sum(wait_event_count) AS waits, sum(wait_event_time) / NULLIF(sum(wait_event_count), 0) AS avg_wait_s,
+         max(ts) AS last_seen
+  FROM system.lakebase.wait_event_counters
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND wait_class_name = 'Lock' AND wait_event_name = 'page'
+  GROUP BY project_id, branch_id, endpoint_id
+fix:
+  kind: manual
+  risk: safe

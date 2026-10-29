@@ -1,0 +1,21 @@
+id: statement_timeouts
+title: "Statements cancelled by statement_timeout"
+category: incidents
+source: delta
+thresholds: {info: 1, warning: 10, critical: 100}
+explain: >
+  Statements cancelled by statement_timeout (SQLSTATE 57014) in the last 24 hours. A cancelled write is lost
+  unless the client retries. while_locking_row counts cancellations whose error context says the statement was
+  waiting for a row lock; check hot_row_lock for who held it (application transaction vs. a commit stalled on the
+  storage quorum). The rest timed out doing work: see top_db_time_query, storage_wait and gin_cleanup_lock_wait.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, count(*) AS measure,
+         sum(CASE WHEN context RLIKE '(?i)while (locking|updating|deleting) tuple' THEN 1 ELSE 0 END) AS while_locking_row,
+         any_value(compute_mode) AS compute_mode, max(ts) AS last_seen
+  FROM system.lakebase.postgres_logs
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND sqlstate = '57014'
+    AND message LIKE 'canceling statement due to statement timeout%'
+  GROUP BY project_id, branch_id, endpoint_id
+fix:
+  kind: manual
+  risk: safe

@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+*.egg-info/
+engine/dist/
+engine/build/
+.databricks/
+.pytest_cache/
+.superpowers/
+.DS_Store
+node_modules/
+dist/
+.claude/
+.isaac/
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.secret
+*.log
+# Databricks CLI profiles (credentials)
+.databrickscfg

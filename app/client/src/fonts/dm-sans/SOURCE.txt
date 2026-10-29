@@ -1,0 +1,1 @@
+Vendored from @fontsource/dm-sans 5.2.8 (latin 400-700, SIL OFL 1.1): the Databricks Apps npm proxy does not serve that package.

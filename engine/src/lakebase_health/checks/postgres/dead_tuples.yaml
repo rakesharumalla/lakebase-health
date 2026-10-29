@@ -1,0 +1,21 @@
+id: dead_tuples
+title: "High share of dead tuples"
+category: maintenance
+source: postgres
+thresholds: {warning: 10, critical: 20}
+explain: >
+  Dead tuples as a share of all tuples on tables with more than 10k rows. Vacuum is falling behind or blocked;
+  check autovacuum_blocker first, then tune autovacuum per table.
+sql: |
+  SELECT quote_ident(schemaname) || '.' || quote_ident(relname) AS object,
+         quote_ident(schemaname) || '.' || quote_ident(relname) AS table_ident,
+         n_live_tup, n_dead_tup, last_autovacuum, autovacuum_count,
+         (100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0))::float8 AS measure
+  FROM pg_stat_user_tables
+  WHERE n_live_tup + n_dead_tup > 10000 AND schemaname NOT IN {excluded_schemas}
+fix:
+  kind: ddl
+  template: "VACUUM (ANALYZE) {table_ident};"
+  rollback_note: "Not needed: VACUUM changes no data"
+  risk: safe
+  reversible: true

@@ -1,0 +1,15 @@
+id: xmin_horizon_holder
+title: "Session holds back vacuum and freezing"
+category: maintenance
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 50000000, critical: 200000000}
+explain: >
+  A session whose snapshot (backend_xmin) is very old in transaction IDs. Vacuum cannot remove rows newer than it
+  and freezing stalls. Find the owner and end the transaction.
+sql: |
+  SELECT 'pid ' || pid AS object, pid, usename, application_name, state, age(backend_xmin)::float8 AS measure,
+         extract(epoch FROM now() - xact_start)::float8 AS xact_age_s, left(query, 200) AS query_text
+  FROM pg_stat_activity
+  WHERE backend_xmin IS NOT NULL AND pid <> pg_backend_pid() AND usename NOT IN {excluded_users}
+fix: {kind: manual, template: "After confirming with the session owner: SELECT pg_terminate_backend({pid});", risk: high}

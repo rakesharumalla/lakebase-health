@@ -1,0 +1,32 @@
+id: gin_pending_list
+title: "GIN index pending list near its limit"
+category: indexing
+source: postgres
+requires_extension: pgstattuple
+thresholds: {info: 25, warning: 50, critical: 90}
+explain: >
+  How full the GIN fast-update pending list is, as a percentage of gin_pending_list_limit, at the time of the check.
+  When a write pushes the list past the limit, that write merges the whole list into the index itself, which can
+  take seconds and blocks other writers (see gin_cleanup_lock_wait). Check idx_scan on every compute before
+  keeping a large GIN index; then prefer a smaller index (only the searched text, scoped by tenant), a scheduled
+  gin_clean_pending_list, or fastupdate = off if per-write cost is acceptable.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS index_ident, t.relname AS table_name,
+         g.pending_pages, g.pending_tuples, lim.limit_kb, s.idx_scan, pg_relation_size(c.oid)::float8 AS index_bytes,
+         coalesce((SELECT option_value FROM pg_options_to_table(c.reloptions) WHERE option_name = 'fastupdate'), 'on') AS fastupdate,
+         (100.0 * g.pending_pages * current_setting('block_size')::int / (1024.0 * lim.limit_kb))::float8 AS measure
+  FROM pg_index i
+  JOIN pg_class c ON c.oid = i.indexrelid
+  JOIN pg_am a ON a.oid = c.relam AND a.amname = 'gin'
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  JOIN pg_class t ON t.oid = i.indrelid
+  LEFT JOIN pg_stat_user_indexes s ON s.indexrelid = c.oid
+  CROSS JOIN LATERAL (SELECT coalesce((SELECT option_value::int FROM pg_options_to_table(c.reloptions)
+                                       WHERE option_name = 'gin_pending_list_limit'),
+                                      (SELECT setting::int FROM pg_settings WHERE name = 'gin_pending_list_limit')) AS limit_kb) lim
+  CROSS JOIN LATERAL pgstatginindex(c.oid::regclass) g
+  WHERE i.indisvalid AND n.nspname NOT IN {excluded_schemas}
+fix:
+  kind: manual
+  risk: safe

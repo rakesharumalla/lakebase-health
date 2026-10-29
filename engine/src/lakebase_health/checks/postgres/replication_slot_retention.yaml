@@ -1,0 +1,16 @@
+id: replication_slot_retention
+title: "Inactive replication slot retains WAL"
+category: replication
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 0, critical: 1073741824}
+explain: >
+  An inactive replication slot (measure = WAL bytes retained) also holds back xmin/catalog_xmin. Lakebase platform
+  slots are excluded. Confirm no consumer (Lakehouse Sync, CDC) owns it before dropping.
+sql: |
+  SELECT slot_name AS object, slot_type, plugin, age(xmin)::float8 AS xmin_age,
+         age(catalog_xmin)::float8 AS catalog_xmin_age,
+         pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)::float8 AS measure
+  FROM pg_replication_slots
+  WHERE NOT active AND slot_name NOT IN {excluded_slots}
+fix: {kind: manual, template: "Confirm no consumer owns slot {object}, then: SELECT pg_drop_replication_slot('{object}');", risk: high}

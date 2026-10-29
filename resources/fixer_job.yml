@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    lakebase_health_fixer:
+      name: lakebase-health-fixer
+      max_concurrent_runs: 1
+      run_as:
+        service_principal_name: ${var.fixer_sp}
+      schedule:
+        quartz_cron_expression: "0 0/15 * * * ?"
+        timezone_id: UTC
+      tasks:
+        - task_key: fix
+          environment_key: engine
+          python_wheel_task:
+            package_name: lakebase_health
+            entry_point: fix
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}", "--pii-masking", "${var.pii_masking}"]
+      environments:
+        - environment_key: engine
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../engine/dist/*.whl
+              - psycopg[binary]>=3.1
+              - databricks-sdk>=0.81.0
+              - pyyaml>=6

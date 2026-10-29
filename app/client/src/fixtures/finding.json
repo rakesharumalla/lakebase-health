@@ -1,0 +1,346 @@
+{
+ "finding": {
+  "fingerprint": "e1472ab887bcf5b28595e4eba4fa6f20",
+  "check_id": "hot_row_lock",
+  "title": "Writes wait on a row lock",
+  "category": "incidents",
+  "project_id": "11111111-2222-4333-8444-555555555555",
+  "branch_id": "br-long-frog-d21k17b0",
+  "endpoint_id": "ep-sample-primary-a1b2c3d4",
+  "object": "ep-sample-primary-a1b2c3d4/-3196267159430279274",
+  "status": "open",
+  "severity": "critical",
+  "confidence": "high",
+  "measure": "89.762",
+  "first_seen": "2026-10-28T13:48:07.058Z",
+  "last_seen": "2026-10-28T14:12:54.840Z",
+  "last_checked_at": "2026-10-28T14:12:54.840Z",
+  "occurrences": "2",
+  "evidence": "{\"blocked_by_active\":0,\"blocked_by_commit_wait\":0,\"blocked_by_idle_in_transaction\":90,\"blocker_not_sampled\":358,\"likely_cause\":\"idle_in_transaction\",\"measure\":\"89.762000\",\"queryid\":\"-3196267159430279274\",\"samples\":448,\"waiting_sessions\":5}",
+  "query_text": null,
+  "explain": "Longest time (seconds) a sampled statement waited for a row lock (tuple or transactionid) in the last 24 hours, per query. Each wait is joined to the blocking session's sample at the same instant to name the cause in likely_cause: commit_wait means the lock holder was itself waiting for the WAL storage quorum (platform side, see commit_quorum_wait); idle_in_transaction means the application holds a transaction open between statements (set idle_in_transaction_session_timeout, commit sooner); active means real hot-key contention (shorten the transaction, avoid many writers updating the same row, batch per key, or use SKIP LOCKED for queues). not_sampled means the holder was not captured at that instant.",
+  "candidate_sql": null,
+  "rollback_sql": null,
+  "resolved_at": null
+ },
+ "history": [
+  {
+   "ts": "2026-10-28T13:48:07.058Z",
+   "measure": "89.762",
+   "severity": "critical",
+   "status": "ok"
+  },
+  {
+   "ts": "2026-10-28T14:12:54.840Z",
+   "measure": "89.762",
+   "severity": "critical",
+   "status": "ok"
+  }
+ ],
+ "actions": [],
+ "related": {
+  "total": 20,
+  "rows": [
+   {
+    "key": "f:366531ececd35d1fb93a0e253b979441",
+    "kind": "finding",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": null,
+    "fingerprint": "366531ececd35d1fb93a0e253b979441",
+    "check_id": "deadlocks",
+    "title": "Deadlocks detected",
+    "category": "performance",
+    "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "366531ececd35d1fb93a0e253b979441",
+      "check_id": "deadlocks",
+      "label": "deadlocks",
+      "severity": "critical",
+      "status": "open",
+      "title": "Deadlocks detected"
+     }
+    ]
+   },
+   {
+    "key": "f:b9701f1bfe16e14ef221dc974c14dab7",
+    "kind": "finding",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": null,
+    "fingerprint": "b9701f1bfe16e14ef221dc974c14dab7",
+    "check_id": "seq_scan_read_ratio",
+    "title": "Database reads far more rows than it uses",
+    "category": "performance",
+    "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "b9701f1bfe16e14ef221dc974c14dab7",
+      "check_id": "seq_scan_read_ratio",
+      "label": "seq scan read ratio",
+      "severity": "critical",
+      "status": "open",
+      "title": "Database reads far more rows than it uses"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-1613922815886283983",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-1613922815886283983",
+    "fingerprint": "b14a625d1873ca23a89a94a259cc9228",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-1613922815886283983",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "b14a625d1873ca23a89a94a259cc9228",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-2957466794749834636",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-2957466794749834636",
+    "fingerprint": "30469021c19045c7ec1adb87f04e2505",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-2957466794749834636",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "30469021c19045c7ec1adb87f04e2505",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-4158454350075717392",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-4158454350075717392",
+    "fingerprint": "73f799f61145636a9c06c6f50d852938",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-4158454350075717392",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "73f799f61145636a9c06c6f50d852938",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-4281100324388517746",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-4281100324388517746",
+    "fingerprint": "df93f760b227910c6854998fcc84862f",
+    "check_id": "hot_row_lock",
+    "title": "Writes wait on a row lock",
+    "category": "performance",
+    "object": "ep-sample-primary-a1b2c3d4/-4281100324388517746",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "df93f760b227910c6854998fcc84862f",
+      "check_id": "hot_row_lock",
+      "label": "row lock wait",
+      "severity": "critical",
+      "status": "open",
+      "title": "Writes wait on a row lock"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-4564332954916989246",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-4564332954916989246",
+    "fingerprint": "554b95ca0f864a0f3f1b74017b2f662f",
+    "check_id": "hot_row_lock",
+    "title": "Writes wait on a row lock",
+    "category": "performance",
+    "object": "ep-sample-primary-a1b2c3d4/-4564332954916989246",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "554b95ca0f864a0f3f1b74017b2f662f",
+      "check_id": "hot_row_lock",
+      "label": "row lock wait",
+      "severity": "critical",
+      "status": "open",
+      "title": "Writes wait on a row lock"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-651696898984279785",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-651696898984279785",
+    "fingerprint": "0ae9847af7966c9f2176698bbba37417",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-651696898984279785",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "0ae9847af7966c9f2176698bbba37417",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-653352816085218349",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-653352816085218349",
+    "fingerprint": "c8d34717588e89119b151a5d5508b29d",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-653352816085218349",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "c8d34717588e89119b151a5d5508b29d",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-6894630972591858249",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-6894630972591858249",
+    "fingerprint": "bdbbc46d5d1e58ee9792b0de6dfcf98f",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-6894630972591858249",
+    "severity": "critical",
+    "status": "open",
+    "confidence": null,
+    "first_seen": null,
+    "last_seen": "2026-10-28T14:12:54.840Z",
+    "occurrences": 1,
+    "measure": null,
+    "db_ms": null,
+    "resolved_at": null,
+    "issues": [
+     {
+      "fingerprint": "bdbbc46d5d1e58ee9792b0de6dfcf98f",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "critical",
+      "status": "open",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   }
+  ]
+ }
+}

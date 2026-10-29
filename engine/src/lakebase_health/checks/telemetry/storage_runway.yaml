@@ -1,0 +1,17 @@
+id: storage_runway
+title: "Storage projected to fill soon"
+category: forecast
+source: delta
+direction: below
+thresholds: {warning: 90, critical: 30}
+explain: >
+  Days until storage reaches its limit at the 7-day linear growth rate. Act before the runway is gone.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         (max_by(total_size_limit, ts) - max_by(total_size, ts))
+           / NULLIF(regr_slope(total_size, unix_timestamp(ts)) * 86400, 0) AS measure,
+         regr_slope(total_size, unix_timestamp(ts)) * 86400 AS growth_bytes_per_day
+  FROM system.lakebase.compute_gauges
+  WHERE ts >= current_timestamp() - INTERVAL 7 DAYS AND total_size IS NOT NULL
+  GROUP BY project_id, branch_id, endpoint_id
+  HAVING regr_slope(total_size, unix_timestamp(ts)) > 0

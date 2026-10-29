@@ -1,0 +1,29 @@
+id: guardrail_settings
+title: "Guardrail setting missing or too loose"
+category: config
+source: postgres
+thresholds: {info: 0, warning: 1}
+explain: >
+  One result per setting. idle_in_transaction_session_timeout above 60 s (Lakebase default is 5 min) is a warning
+  with a database-level fix; statement_timeout = 0 and track_io_timing = off are informational.
+sql: |
+  SELECT current_database() || ':' || name AS object, name, setting,
+         quote_ident(current_database()) AS db_ident,
+         CASE name  -- nested CASE: Postgres does not guarantee AND evaluation order, and setting::bigint fails on 'off'
+           WHEN 'idle_in_transaction_session_timeout' THEN CASE WHEN setting = '0' THEN 2.0
+                                                              WHEN setting::bigint > 60000 THEN 2.0 ELSE 0.0 END
+           WHEN 'statement_timeout' THEN CASE WHEN setting = '0' THEN 1.0 ELSE 0.0 END
+           WHEN 'track_io_timing' THEN CASE WHEN setting = 'off' THEN 1.0 ELSE 0.0 END
+           ELSE 0.0 END AS measure,
+         CASE WHEN name = 'idle_in_transaction_session_timeout'
+              THEN 'ALTER DATABASE ' || quote_ident(current_database()) || ' SET idle_in_transaction_session_timeout = ''60s'';' END AS fix_sql,
+         CASE WHEN name = 'idle_in_transaction_session_timeout'
+              THEN 'ALTER DATABASE ' || quote_ident(current_database()) || ' RESET idle_in_transaction_session_timeout;' END AS fix_rollback
+  FROM pg_settings
+  WHERE name IN ('idle_in_transaction_session_timeout', 'statement_timeout', 'track_io_timing')
+fix:
+  kind: setting
+  template: "{fix_sql}"
+  rollback: "{fix_rollback}"
+  risk: moderate
+  reversible: true

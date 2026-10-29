@@ -1,0 +1,15 @@
+id: idle_in_tx_time
+title: "Sessions spend a lot of time idle in transaction"
+category: incidents
+source: delta
+thresholds: {warning: 5, critical: 20}
+explain: >
+  Share of session time spent idle inside an open transaction (24 h). Such sessions hold locks and block vacuum.
+  Set idle_in_transaction_session_timeout (30-60 s) and fix application transaction scoping.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object,
+         100.0 * sum(idle_in_transaction_time_ms) / NULLIF(sum(session_time_ms), 0) AS measure,
+         sum(sessions_killed) AS sessions_killed, sum(sessions_fatal) AS sessions_fatal
+  FROM system.lakebase.database_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, datname
+  HAVING sum(session_time_ms) > 600000

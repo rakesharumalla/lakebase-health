@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.client.test.tsbuildinfo"
+  },
+  // Lint/editor coverage for component tests; not part of the app build.
+  "include": ["client/src", "shared/appkit-types"],
+  "exclude": []
+}

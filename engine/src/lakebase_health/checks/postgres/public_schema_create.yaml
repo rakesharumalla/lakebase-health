@@ -1,0 +1,19 @@
+id: public_schema_create
+title: "Any role can create objects in a schema"
+category: security
+source: postgres
+thresholds: {warning: 0}
+explain: >
+  PUBLIC holds CREATE on the schema, so every role can create objects there (an object-squatting and
+  privilege-escalation risk). Revoke it and grant CREATE only to owning roles.
+sql: |
+  SELECT quote_ident(nspname) AS object, quote_ident(nspname) AS schema_ident, 1.0::float8 AS measure
+  FROM pg_namespace
+  WHERE nspname NOT IN {excluded_schemas} AND nspname NOT LIKE 'pg\_%'
+    AND has_schema_privilege('public', oid, 'CREATE')
+fix:
+  kind: ddl
+  template: "REVOKE CREATE ON SCHEMA {schema_ident} FROM PUBLIC;"
+  rollback: "GRANT CREATE ON SCHEMA {schema_ident} TO PUBLIC;"
+  risk: moderate
+  reversible: true

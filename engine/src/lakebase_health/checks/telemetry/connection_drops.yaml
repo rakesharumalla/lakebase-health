@@ -1,0 +1,28 @@
+id: connection_drops
+title: "Client connections dropped (SSL EOF, resets)"
+category: connectivity
+source: delta
+thresholds: {info: 10, warning: 100, critical: 1000}
+explain: >
+  Connections that ended abnormally in the last 24 hours, per compute (compute_mode tells primary from read
+  replica). ssl_eof and client_lost usually mean the client or a proxy/load balancer closed an idle connection;
+  set the pool's max idle time below 24 hours, enable TCP keepalives and validate connections before use. If
+  compute_restarts is non-zero the compute restarted (scale to zero, replica restart or failover) and dropped its
+  sessions; retry on connection errors and check replica_lag for the same window. TLS client-certificate failures
+  are excluded (a client configuration issue, not a drop).
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, any_value(compute_mode) AS compute_mode,
+         sum(CASE WHEN message RLIKE '(?i)^(SSL error: unexpected eof|could not accept SSL connection: (EOF detected|Connection reset))' THEN 1 ELSE 0 END)
+           + sum(CASE WHEN message RLIKE '^(could not receive data from client|could not send data to client)' THEN 1 ELSE 0 END)
+           + sum(CASE WHEN message RLIKE '^(connection to client lost|unexpected EOF on client connection)' THEN 1 ELSE 0 END) AS measure,
+         sum(CASE WHEN message RLIKE '(?i)^(SSL error: unexpected eof|could not accept SSL connection: (EOF detected|Connection reset))' THEN 1 ELSE 0 END) AS ssl_eof,
+         sum(CASE WHEN message RLIKE '^(could not receive data from client|could not send data to client)' THEN 1 ELSE 0 END) AS connection_reset,
+         sum(CASE WHEN message RLIKE '^(connection to client lost|unexpected EOF on client connection)' THEN 1 ELSE 0 END) AS client_lost,
+         sum(CASE WHEN message RLIKE '^(the database system is starting up|terminating walreceiver|could not receive data from WAL stream)' THEN 1 ELSE 0 END) AS compute_restarts,
+         max(ts) AS last_seen
+  FROM system.lakebase.postgres_logs
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND sqlstate IN ('08006', '08P01', '57P01', '57P03')
+  GROUP BY project_id, branch_id, endpoint_id
+fix:
+  kind: manual
+  risk: safe

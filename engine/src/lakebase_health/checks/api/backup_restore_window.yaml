@@ -1,0 +1,10 @@
+id: backup_restore_window
+title: "Point-in-time restore window is short"
+category: backup
+source: api
+function: backup_restore_window
+direction: below
+thresholds: {warning: 7, critical: 3}
+explain: >
+  The project's restore window in days (2-30, default 7). Production should keep at least 7 days; regulated
+  workloads 14-30. Change it in project Settings > History window.

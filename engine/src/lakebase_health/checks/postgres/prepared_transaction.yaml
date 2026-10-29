@@ -1,0 +1,14 @@
+id: prepared_transaction
+title: "Forgotten prepared transaction"
+category: maintenance
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 3600, critical: 86400}
+explain: >
+  A two-phase (prepared) transaction older than an hour (seconds). It holds locks and blocks vacuum until it is
+  committed or rolled back by its transaction manager.
+sql: |
+  SELECT gid AS object, owner, database, extract(epoch FROM now() - prepared)::float8 AS measure,
+         age(transaction)::float8 AS xid_age
+  FROM pg_prepared_xacts
+fix: {kind: manual, template: "If no transaction manager owns it: ROLLBACK PREPARED '{object}';", risk: high}

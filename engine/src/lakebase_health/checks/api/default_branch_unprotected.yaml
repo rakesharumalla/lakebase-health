@@ -1,0 +1,8 @@
+id: default_branch_unprotected
+title: "Default (production) branch is not protected"
+category: backup
+source: api
+function: default_branch_unprotected
+thresholds: {warning: 0}
+explain: >
+  The project's default branch can be reset or deleted. Protect it (update-branch spec.is_protected = true).

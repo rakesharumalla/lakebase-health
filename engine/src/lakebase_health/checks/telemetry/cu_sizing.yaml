@@ -1,0 +1,69 @@
+id: cu_sizing
+title: "Compute size does not match the workload"
+category: capacity
+source: delta
+superseded_by:   # cu_sizing is a composite of these signals; the specific finding names the cause
+  key: endpoint
+  checks: [cpu_saturation, lfc_hit_rate, working_set_vs_cache]
+thresholds: {info: 0, warning: 1}
+# Calibrated 2026-10-28 (live: the old rule called 998 of 1,018 endpoints undersized). The old LFC test (7-day hit
+# rate < 95 % with no read floor) tripped on 988 endpoints, 885 of them with < 10k cache reads in a week: computes
+# that scale to zero and wake to a cold cache. CPU samples that span a suspend produced impossible values (up to
+# 15,000x the cores). Telemetry has no autoscaling range, so the largest memory size a compute reached in the window
+# stands in for its max CU and the smallest for its min CU.
+#   undersized (2): >= 1 h at its largest size AND, at that size, p95 CPU > 85 %, p95 working set > cache, or a
+#                   cache hit rate < 95 % over >= 1M reads. Pressure while scaled down is autoscaling working.
+#   oversized (1):  min CU >= 2 (>= 3.5 GiB), active >= 151 h of the 168 h window (no scale to zero), >= 90 % of
+#                   that time at its smallest size, and there p95 CPU < 20 %, p95 working set < 40 % of cache and a
+#                   hit rate >= 99 % (or < 1M reads).
+explain: >
+  Compute size against 7 days of telemetry. measure = 2 (undersized) when, for at least an hour at the largest
+  size the compute reached, p95 CPU is above 85%, the working set exceeds the cache, or the cache hit rate is below
+  95% over at least 1M reads. measure = 1 (oversized) when an always-on compute of 2 CU or more sat at its minimum
+  size with p95 CPU under 20%, a working set under 40% of the cache and a 99% hit rate. Short bursts, cold caches
+  after scale-to-zero and pressure while still scaled down are ignored.
+sql: |
+  WITH s AS (
+    SELECT c.project_id, c.branch_id, c.endpoint_id, timestampdiff(SECOND, c.previous_ts, c.ts) AS secs,
+           c.host_cpu_seconds / NULLIF(timestampdiff(MILLISECOND, c.previous_ts, c.ts) / 1000.0, 0)
+             / NULLIF(g.host_logical_cpus, 0) AS cpu,
+           c.lfc_hits, c.lfc_misses, g.host_memory_total_bytes AS mem,
+           g.lfc_working_set_size_60m / NULLIF(g.lfc_size_limit, 0) AS ws
+    FROM system.lakebase.compute_counters c
+    JOIN system.lakebase.compute_gauges g
+      ON c.compute_id = g.compute_id AND date_trunc('MINUTE', c.ts) = date_trunc('MINUTE', g.ts)
+    WHERE c.ts >= current_timestamp() - INTERVAL 7 DAYS
+      -- a sample spanning a suspend or restart gives meaningless CPU rates
+      AND timestampdiff(SECOND, c.previous_ts, c.ts) BETWEEN 1 AND 300),
+  r AS (SELECT endpoint_id, max(mem) AS mem_max, min(mem) AS mem_min FROM s GROUP BY endpoint_id),
+  a AS (
+    SELECT s.project_id, s.branch_id, s.endpoint_id, max(r.mem_max) AS mem_max, max(r.mem_min) AS mem_min,
+           sum(s.secs) / 3600.0 AS hours,
+           sum(CASE WHEN s.mem = r.mem_max THEN s.secs ELSE 0 END) / 3600.0 AS hours_at_max,
+           sum(CASE WHEN s.mem = r.mem_min THEN s.secs ELSE 0 END) / 3600.0 AS hours_at_min,
+           percentile_approx(CASE WHEN s.mem = r.mem_max THEN s.cpu END, 0.95) AS cpu_max,
+           percentile_approx(CASE WHEN s.mem = r.mem_min THEN s.cpu END, 0.95) AS cpu_min,
+           percentile_approx(CASE WHEN s.mem = r.mem_max THEN s.ws END, 0.95) AS ws_max,
+           percentile_approx(CASE WHEN s.mem = r.mem_min THEN s.ws END, 0.95) AS ws_min,
+           sum(CASE WHEN s.mem = r.mem_max THEN s.lfc_hits + s.lfc_misses END) AS reads_max,
+           100.0 * try_divide(sum(CASE WHEN s.mem = r.mem_max THEN s.lfc_hits END),
+                              sum(CASE WHEN s.mem = r.mem_max THEN s.lfc_hits + s.lfc_misses END)) AS hit_max,
+           sum(CASE WHEN s.mem = r.mem_min THEN s.lfc_hits + s.lfc_misses END) AS reads_min,
+           100.0 * try_divide(sum(CASE WHEN s.mem = r.mem_min THEN s.lfc_hits END),
+                              sum(CASE WHEN s.mem = r.mem_min THEN s.lfc_hits + s.lfc_misses END)) AS hit_min
+    FROM s JOIN r ON r.endpoint_id = s.endpoint_id
+    GROUP BY s.project_id, s.branch_id, s.endpoint_id)
+  -- classify (plain SQL only below this line: a unit test runs it on sqlite)
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         mem_max / 1073741824.0 AS max_size_gib, mem_min / 1073741824.0 AS min_size_gib, hours, hours_at_max,
+         hours_at_min, 100 * cpu_max AS p95_cpu_pct_at_max, 100 * cpu_min AS p95_cpu_pct_at_min,
+         100 * ws_max AS p95_ws_pct_at_max, 100 * ws_min AS p95_ws_pct_at_min, hit_max AS lfc_hit_pct_at_max,
+         reads_max AS lfc_reads_at_max,
+         CASE WHEN hours_at_max >= 1
+                   AND (cpu_max > 0.85 OR ws_max > 1.0 OR (reads_max >= 1000000 AND hit_max < 95)) THEN 2
+              WHEN mem_min >= 3.5 * 1073741824 AND hours >= 151 AND hours_at_min >= 0.9 * hours
+                   AND cpu_min < 0.20 AND ws_min < 0.40
+                   AND (reads_min IS NULL OR reads_min < 1000000 OR hit_min >= 99) THEN 1
+              ELSE 0 END AS measure
+  FROM a
+fix: {kind: manual, template: "measure 2: raise max CU (min CU if cache-bound). measure 1: lower min CU or enable scale-to-zero on non-prod.", risk: moderate}

@@ -1,0 +1,57 @@
+id: row_misestimate
+title: "Planner row estimates are far off"
+title_template: "Row estimates far off for {queries} queries"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+# One finding per endpoint. measure = share (%) of the endpoint's 24 h DB time (pg_stat_statements total_exec_time,
+# platform roles excluded) spent in qualifying queries. A query qualifies only above all floors:
+#   calls >= 50 and total_ms >= 1000 in 24 h   - drops one-off and trivial queries
+#   sampled_execs >= 3 over sampled_hours >= 2 - the misestimate holds across executions and engine runs
+#   factor >= 10, the MEDIAN per-execution ratio (not the max), so one odd parameter value does not qualify
+# Live data on 2026-10-28 (22,430 read queries with analyzed plans): max factor > 10 flagged 5,226 queries on 189
+# endpoints; these floors keep 35 queries on 13 endpoints that still hold 97% (11,356 s) of the DB time those
+# 5,226 queries used. Severity bands on the share: info > 0, warning > 10, critical > 50.
+thresholds: {info: 0, warning: 10, critical: 50}
+explain: >
+  Share of the endpoint's database time (24 h) spent in read queries whose planner row estimate is off by 10x or
+  more in the median execution (at least 50 calls, 1 s total and 3 sampled executions over 2 hours). The worst 10
+  by time are listed with estimated and actual rows. Run ANALYZE on the tables they read; add CREATE STATISTICS
+  (dependencies, ndistinct) for correlated columns.
+sql: |
+  WITH e AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, ts, plan_rows, actual_rows,
+           greatest(greatest(actual_rows, 1) / greatest(plan_rows, 1),
+                    greatest(plan_rows, 1) / greatest(actual_rows, 1)) AS factor
+    FROM system.lakebase.plan_history
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled
+      -- writes return 0 rows from ModifyTable; a redacted plan (PII mask) cannot show the node type, so it counts
+      -- only when rows came back
+      AND ((plan_json RLIKE '"Node Type"' AND NOT plan_json RLIKE '"Node Type":\\s*"ModifyTable"')
+           OR (NOT plan_json RLIKE '"Node Type"' AND actual_rows > 0))),
+  m AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, count(*) AS sampled_execs,
+           count(DISTINCT date_trunc('HOUR', ts)) AS sampled_hours, percentile_approx(factor, 0.5) AS factor,
+           percentile_approx(plan_rows, 0.5) AS est_rows, percentile_approx(actual_rows, 0.5) AS actual_rows
+    FROM e GROUP BY project_id, branch_id, endpoint_id, queryid),
+  s AS (
+    SELECT endpoint_id, queryid, sum(calls) AS calls, sum(total_exec_time) AS total_ms
+    FROM system.lakebase.pg_stat_statements_counters
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND toplevel
+    GROUP BY endpoint_id, queryid),
+  t AS (SELECT endpoint_id, sum(total_ms) AS endpoint_ms FROM s GROUP BY endpoint_id),
+  q AS (
+    SELECT m.*, s.calls, s.total_ms
+    FROM m JOIN s ON s.endpoint_id = m.endpoint_id AND s.queryid = m.queryid
+    WHERE s.calls >= 50 AND s.total_ms >= 1000 AND m.sampled_execs >= 3 AND m.sampled_hours >= 2
+      AND m.factor >= 10)
+  SELECT q.project_id, q.branch_id, q.endpoint_id, q.endpoint_id AS object, count(*) AS queries,
+         round(sum(q.total_ms), 1) AS misestimated_ms, round(max(t.endpoint_ms), 1) AS endpoint_ms,
+         100.0 * sum(q.total_ms) / NULLIF(max(t.endpoint_ms), 0) AS measure,
+         slice(sort_array(collect_list(named_struct(
+           'total_ms', round(q.total_ms, 1), 'queryid', CAST(q.queryid AS STRING), 'calls', q.calls,
+           'est_rows', q.est_rows, 'actual_rows', q.actual_rows, 'factor', round(q.factor, 1))), false), 1, 10)
+           AS top_queries
+  FROM q JOIN t ON t.endpoint_id = q.endpoint_id
+  GROUP BY q.project_id, q.branch_id, q.endpoint_id
+fix: {kind: manual, template: "ANALYZE the tables read by the queries in evidence.top_queries; consider CREATE STATISTICS (dependencies, ndistinct) on correlated columns.", risk: safe}

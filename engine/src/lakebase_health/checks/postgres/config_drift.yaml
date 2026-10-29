@@ -1,0 +1,18 @@
+id: config_drift
+title: "Role or database setting override"
+category: config
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {info: 0}
+explain: >
+  A setting overridden with ALTER ROLE / ALTER DATABASE (platform roles and settings excluded). The setting value
+  is part of the finding identity, so a changed value appears as a new finding and the old one resolves.
+sql: |
+  SELECT coalesce(r.rolname, '*') || '@' || coalesce(d.datname, '*') || ':' || cfg AS object,
+         coalesce(r.rolname, '*') AS role_name, coalesce(d.datname, '*') AS database_name, cfg AS setting,
+         1.0::float8 AS measure
+  FROM pg_db_role_setting s
+  LEFT JOIN pg_roles r ON r.oid = s.setrole LEFT JOIN pg_database d ON d.oid = s.setdatabase
+  CROSS JOIN LATERAL unnest(s.setconfig) AS cfg
+  WHERE coalesce(r.rolname, '') !~ {excluded_role_regex} AND coalesce(r.rolname, '') NOT IN {excluded_roles}
+    AND split_part(cfg, '=', 1) !~ {excluded_settings_regex}

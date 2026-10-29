@@ -1,0 +1,54 @@
+bundle:
+  name: lakebase-health
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Catalog that will hold the lakebase_health schema (required)
+  schema:
+    description: Schema for derived tables
+    default: lakebase_health
+  schedule:
+    description: Quartz cron for the engine (default hourly; ingest takes ~20 min, so keep >= 30 min)
+    default: "0 0 * * * ?"
+  ingest_interval_minutes:
+    description: >-
+      Minutes between engine runs, matching `schedule` (60 for the hourly default). A telemetry source counts as
+      stale after twice this without new data, and the app's stale banner uses the same value
+    default: "60"
+  analysis_schedule:
+    description: Quartz cron for the analysis-only job (default every 15 minutes)
+    default: "0 0/15 * * * ?"
+  engine_sp:
+    description: Application ID of the service principal the job runs as (required; see README)
+  fixer_sp:
+    description: Application ID of the fixer service principal (writes fixes; see README)
+  warehouse_id:
+    description: SQL warehouse the app queries (the app SP gets CAN_USE)
+  pii_masking:
+    description: >-
+      "true" masks query text, plans and parameters for anyone outside databricks_pii_access; "false" shows them
+      to every reader of the tables and every app user (see README "PII masking")
+    default: "true"
+  engine_enabled:
+    description: Set to "false" to stop all engine work
+    default: "true"
+
+artifacts:
+  engine:
+    type: whl
+    path: ./engine
+    build: python3 -m pip wheel . --no-deps -w dist
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # The dev target is the my-profile workspace. Query text is shown to everyone there for now (user decision
+    # 2026-10-28); PII access comes later. Remove this to mask again.
+    variables:
+      pii_masking: "false"
+  prod:
+    mode: production

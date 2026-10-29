@@ -1,0 +1,22 @@
+id: autovacuum_scale_factor
+title: "Large table needs per-table autovacuum tuning"
+category: maintenance
+source: postgres
+thresholds: {warning: 10, critical: 30}
+explain: >
+  A table with more than 1M live rows, default autovacuum scale factor and more than 10% dead tuples. The default
+  0.2 waits for 20% of the table to be dead; lower it per table.
+sql: |
+  SELECT quote_ident(s.schemaname) || '.' || quote_ident(s.relname) AS object,
+         quote_ident(s.schemaname) || '.' || quote_ident(s.relname) AS table_ident, s.n_live_tup, s.n_dead_tup,
+         (100.0 * s.n_dead_tup / NULLIF(s.n_live_tup + s.n_dead_tup, 0))::float8 AS measure
+  FROM pg_stat_user_tables s JOIN pg_class c ON c.oid = s.relid
+  WHERE s.n_live_tup > 1000000 AND s.schemaname NOT IN {excluded_schemas}
+    AND coalesce(array_to_string(c.reloptions, ','), '') NOT LIKE '%autovacuum_vacuum_scale_factor%'
+    AND NOT coalesce(c.reloptions @> ARRAY['autovacuum_enabled=false'], false)
+fix:
+  kind: ddl
+  template: "ALTER TABLE {table_ident} SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_vacuum_threshold = 1000, autovacuum_analyze_scale_factor = 0.01);"
+  rollback: "ALTER TABLE {table_ident} RESET (autovacuum_vacuum_scale_factor, autovacuum_vacuum_threshold, autovacuum_analyze_scale_factor);"
+  risk: safe
+  reversible: true

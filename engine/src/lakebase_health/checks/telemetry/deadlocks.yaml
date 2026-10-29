@@ -1,0 +1,12 @@
+id: deadlocks
+title: "Deadlocks detected"
+category: incidents
+source: delta
+thresholds: {warning: 0, critical: 2}
+explain: >
+  Deadlocks in the last 2 hours per database. Lock rows in a consistent order, keep transactions short, retry on
+  40P01, and index foreign keys (missing_fk_index) to narrow lock scope. Details are in postgres_logs (40P01).
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object, sum(deadlocks) AS measure
+  FROM system.lakebase.database_counters WHERE ts >= current_timestamp() - INTERVAL 2 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, datname

@@ -1,0 +1,28 @@
+id: autovacuum_blocker
+title: "Dead tuples pile up because something blocks vacuum"
+category: maintenance
+source: postgres
+thresholds: {warning: 10, critical: 30}
+explain: >
+  Links a table's dead tuples (measure = dead %) to the blocker preventing cleanup: autovacuum disabled on the
+  table, an old snapshot from a long transaction, a replication slot, or a prepared transaction.
+sql: |
+  WITH dead AS (
+    SELECT relid, quote_ident(schemaname) || '.' || quote_ident(relname) AS object,
+           (100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0))::float8 AS dead_pct
+    FROM pg_stat_user_tables WHERE n_live_tup + n_dead_tup > 10000 AND schemaname NOT IN {excluded_schemas}),
+  blockers AS (
+    SELECT 'long_transaction' AS kind, max(age(backend_xmin))::float8 AS xmin_age FROM pg_stat_activity
+      WHERE backend_xmin IS NOT NULL AND pid <> pg_backend_pid() AND usename NOT IN {excluded_users}
+    UNION ALL
+    SELECT 'replication_slot', max(greatest(age(xmin), age(catalog_xmin)))::float8 FROM pg_replication_slots
+      WHERE slot_name NOT IN {excluded_slots}
+    UNION ALL
+    SELECT 'prepared_transaction', max(age(transaction))::float8 FROM pg_prepared_xacts),
+  x AS (
+    SELECT d.object, d.dead_pct AS measure,
+           CASE WHEN c.reloptions @> ARRAY['autovacuum_enabled=false'] THEN 'autovacuum_disabled'
+                ELSE (SELECT kind FROM blockers WHERE xmin_age > 1000000 ORDER BY xmin_age DESC LIMIT 1) END AS blocker
+    FROM dead d JOIN pg_class c ON c.oid = d.relid WHERE d.dead_pct > 10)
+  SELECT object, measure, blocker FROM x WHERE blocker IS NOT NULL
+fix: {kind: manual, template: "Remove the blocker ({blocker}) first; see the matching finding for {object}.", risk: moderate}

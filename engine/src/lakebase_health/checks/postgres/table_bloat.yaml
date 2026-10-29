@@ -1,0 +1,19 @@
+id: table_bloat
+title: "Table bloat"
+category: maintenance
+source: postgres
+schedule: daily
+requires_extension: pgstattuple
+thresholds: {warning: 20, critical: 40}
+explain: >
+  Approximate free space share in the 15 largest tables over 10 MB (pgstattuple_approx; runs daily because it
+  reads pages). VACUUM makes space reusable but does not shrink; shrinking needs VACUUM FULL in a window.
+sql: |
+  SELECT quote_ident(t.schemaname) || '.' || quote_ident(t.relname) AS object,
+         pg_table_size(t.relid)::float8 AS table_bytes, a.dead_tuple_percent::float8 AS dead_pct,
+         a.approx_free_percent::float8 AS measure
+  FROM (SELECT relid, schemaname, relname FROM pg_stat_user_tables
+        WHERE schemaname NOT IN {excluded_schemas} AND pg_table_size(relid) > 10485760
+        ORDER BY pg_table_size(relid) DESC LIMIT 15) t
+  CROSS JOIN LATERAL pgstattuple_approx(t.relid) a
+fix: {kind: manual, template: "Plan VACUUM FULL {object} in a maintenance window (ACCESS EXCLUSIVE lock), then tune autovacuum.", risk: high}

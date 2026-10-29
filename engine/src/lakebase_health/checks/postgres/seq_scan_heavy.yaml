@@ -1,0 +1,16 @@
+id: seq_scan_heavy
+title: "Table read mostly by large sequential scans"
+category: indexing
+source: postgres
+guards: ["stats_window_hours >= 24"]
+thresholds: {warning: 10000, critical: 1000000}
+explain: >
+  Average rows read per sequential scan on a table with more than 10k live rows. Find the queries scanning it
+  (top_db_time_query) and index their filter and join columns; verify the index on a branch.
+sql: |
+  SELECT quote_ident(schemaname) || '.' || quote_ident(relname) AS object, seq_scan, idx_scan, n_live_tup,
+         seq_tup_read, (seq_tup_read::float8 / NULLIF(seq_scan, 0)) AS measure,
+         pg_relation_size(relid)::float8 AS table_bytes
+  FROM pg_stat_user_tables
+  WHERE n_live_tup > 10000 AND seq_scan > 0 AND schemaname NOT IN {excluded_schemas}
+fix: {kind: manual, template: "Index the filter columns of the queries scanning {object}.", risk: moderate}

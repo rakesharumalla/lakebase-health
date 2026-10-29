@@ -1,0 +1,17 @@
+id: working_set_vs_cache
+title: "Working set larger than the compute cache"
+category: capacity
+source: delta
+superseded_by:   # the low hit rate is the measured effect of the same too-small cache; same fix (min CU)
+  key: endpoint
+  checks: [lfc_hit_rate]
+thresholds: {warning: 80, critical: 100}
+explain: >
+  Peak 60-minute working set as a share of the local cache size (both in bytes, 24 h). Above 100% the data a
+  workload touches no longer fits in cache. Raise min/max CU or shrink the working set (unused indexes, bloat).
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         100.0 * max(lfc_working_set_size_60m) / NULLIF(max(lfc_size_limit), 0) AS measure,
+         max(lfc_working_set_size_60m) AS working_set_bytes, max(lfc_size_limit) AS cache_bytes
+  FROM system.lakebase.compute_gauges WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id

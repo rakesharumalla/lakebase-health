@@ -1,0 +1,17 @@
+id: blocked_session
+title: "Session blocked by another session"
+category: incidents
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 60, critical: 300}
+explain: >
+  A session waiting on a lock held by another session (seconds blocked). Resolve the blocker first; durable fixes
+  are idle_in_transaction_session_timeout, lock_timeout for DDL and short transactions.
+sql: |
+  SELECT 'pid ' || a.pid AS object, a.pid AS blocked_pid, b.pid AS blocking_pid, b.state AS blocking_state,
+         a.usename, extract(epoch FROM now() - a.query_start)::float8 AS measure, left(a.query, 200) AS query_text
+  FROM pg_stat_activity a
+  CROSS JOIN LATERAL unnest(pg_blocking_pids(a.pid)) AS bp(pid)
+  JOIN pg_stat_activity b ON b.pid = bp.pid
+  WHERE a.pid <> pg_backend_pid() AND a.usename NOT IN {excluded_users}
+fix: {kind: manual, template: "Blocking pid {blocking_pid} ({blocking_state}); end it if safe: SELECT pg_terminate_backend({blocking_pid});", risk: high}

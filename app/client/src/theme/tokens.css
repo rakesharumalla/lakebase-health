@@ -1,0 +1,267 @@
+/*
+ * Lakebase Health theme tokens: the single source of colour, type and spacing.
+ *
+ * Plain CSS (no Tailwind directives) so a standalone HTML export can link this file as-is.
+ * Three layers:
+ *   1. Brand palette (--lbh-navy, --lbh-lava, ...): fixed Databricks corporate colours.
+ *   2. Role tokens (--lbh-page, --lbh-text, --lbh-sev-*, --lbh-chart-*): what the UI uses.
+ *      Light values on :root; dark values under .dark and prefers-color-scheme: dark,
+ *      mirroring how AppKit UI switches themes.
+ *   3. AppKit mapping (--background, --primary, --chart-cat-*, ...): points AppKit UI's
+ *      CSS variables at the role tokens, so AppKit components and charts pick up the brand.
+ *
+ * Colours are hex because ECharts (AppKit charts) cannot parse oklch.
+ * Contrast pairs are checked by client/src/theme/contrast.test.ts.
+ */
+
+/* 1. Brand palette */
+:root {
+  --lbh-navy: #1b3139;
+  --lbh-navy-900: #0f1e24;
+  --lbh-navy-800: #16272d;
+  --lbh-navy-700: #243f48;
+  --lbh-lava: #ff3621;
+  /* Lava deepened for filled buttons: white text on #FF3621 is 3.6:1, below WCAG AA. */
+  --lbh-lava-600: #d42a10;
+  --lbh-coral: #ff5f46;
+  --lbh-oat: #f9f7f4;
+  --lbh-oat-200: #f1ede7;
+  --lbh-oat-300: #e8e3dc;
+  --lbh-white: #ffffff;
+  --lbh-grey-600: #5b6770;
+  --lbh-grey-300: #d5dde0;
+
+  --lbh-font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --lbh-font-mono: 'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* Type scale (rem) and spacing rhythm (4 px grid) */
+  --lbh-text-xs: 0.75rem;
+  --lbh-text-sm: 0.875rem;
+  --lbh-text-base: 1rem;
+  --lbh-text-lg: 1.125rem;
+  --lbh-text-xl: 1.375rem;
+  --lbh-text-2xl: 1.75rem;
+  --lbh-space-1: 0.25rem;
+  --lbh-space-2: 0.5rem;
+  --lbh-space-3: 0.75rem;
+  --lbh-space-4: 1rem;
+  --lbh-space-6: 1.5rem;
+  --lbh-space-8: 2rem;
+  --lbh-radius: 0.5rem;
+  --lbh-header-height: 3.5rem;
+}
+
+/* 2. Role tokens, light */
+:root {
+  --lbh-page: var(--lbh-oat);
+  --lbh-card: var(--lbh-white);
+  --lbh-card-border: var(--lbh-oat-300);
+  --lbh-subtle: var(--lbh-oat-200);
+  --lbh-text: var(--lbh-navy);
+  --lbh-heading: var(--lbh-navy);
+  --lbh-text-muted: var(--lbh-grey-600);
+  --lbh-header-bg: var(--lbh-navy);
+  --lbh-header-text: var(--lbh-white);
+  --lbh-header-muted: var(--lbh-grey-300);
+  --lbh-primary: var(--lbh-lava-600);
+  --lbh-primary-text: var(--lbh-white);
+  --lbh-accent: var(--lbh-lava);
+  --lbh-accent-hover: var(--lbh-coral);
+  --lbh-focus: var(--lbh-lava);
+  --lbh-danger: #b42318;
+  --lbh-signal-ok: #00a972;
+  --lbh-signal-stale: #f2a900;
+  --lbh-link: var(--lbh-navy);
+  --lbh-code-bg: var(--lbh-oat-200);
+
+  /* Severity and status. critical is a deeper red than Lava and always sits on a tint. */
+  --lbh-sev-critical-fg: #b42318;
+  --lbh-sev-critical-bg: #fef3f2;
+  --lbh-sev-critical-border: #fecdca;
+  --lbh-sev-warning-fg: #93370d;
+  --lbh-sev-warning-bg: #fffaeb;
+  --lbh-sev-warning-border: #fedf89;
+  --lbh-sev-info-fg: #1849a9;
+  --lbh-sev-info-bg: #eff8ff;
+  --lbh-sev-info-border: #b2ddff;
+  --lbh-sev-ok-fg: #067647;
+  --lbh-sev-ok-bg: #ecfdf3;
+  --lbh-sev-ok-border: #abefc6;
+  --lbh-sev-neutral-fg: #475467;
+  --lbh-sev-neutral-bg: #f2f4f7;
+  --lbh-sev-neutral-border: #e4e7ec;
+
+  /* Categorical chart palette (wait classes). Pairwise OKLab distance >= 0.16, >= 0.09 under
+     simulated deuteranopia/protanopia. */
+  --lbh-chart-1: #2272b4;
+  --lbh-chart-2: #ff5f46;
+  --lbh-chart-3: #1b3139;
+  --lbh-chart-4: #f2a900;
+  --lbh-chart-5: #8b5cf6;
+  --lbh-chart-6: #00a972;
+  --lbh-chart-7: #5bc2d9;
+  --lbh-chart-8: #b0457f;
+  --lbh-chart-axis: #5b6770;
+  --lbh-chart-title: #1b3139;
+  --lbh-chart-grid: #e8e3dc;
+  --lbh-chart-tooltip-bg: #ffffff;
+
+  /* Lock blockers: same in both themes. */
+  --lbh-blocker-commit-wait: #8b5cf6;
+  --lbh-blocker-idle-in-transaction: #ff5f46;
+  --lbh-blocker-active: #f2a900;
+  --lbh-blocker-not-sampled: #a3acb2;
+}
+
+/* 2. Role tokens, dark (class, then media fallback, as AppKit UI does) */
+.dark {
+  --lbh-page: var(--lbh-navy-900);
+  --lbh-card: var(--lbh-navy-800);
+  --lbh-card-border: var(--lbh-navy-700);
+  --lbh-subtle: #1f353d;
+  --lbh-text: #e5ecee;
+  --lbh-heading: var(--lbh-oat);
+  --lbh-text-muted: #9aa9ae;
+  --lbh-header-bg: #0b1a1f;
+  --lbh-header-text: var(--lbh-white);
+  --lbh-header-muted: var(--lbh-grey-300);
+  --lbh-link: #e5ecee;
+  --lbh-code-bg: #1f353d;
+  --lbh-sev-critical-fg: #fda29b;
+  --lbh-sev-critical-bg: #3b1512;
+  --lbh-sev-critical-border: #7a271a;
+  --lbh-sev-warning-fg: #fec84b;
+  --lbh-sev-warning-bg: #3a2a0a;
+  --lbh-sev-warning-border: #7a4b0c;
+  --lbh-sev-info-fg: #84caff;
+  --lbh-sev-info-bg: #0f2a44;
+  --lbh-sev-info-border: #1e4a7a;
+  --lbh-sev-ok-fg: #75e0a7;
+  --lbh-sev-ok-bg: #0b2e1e;
+  --lbh-sev-ok-border: #11583a;
+  --lbh-sev-neutral-fg: #d0d5dd;
+  --lbh-sev-neutral-bg: #1f2a30;
+  --lbh-sev-neutral-border: #344054;
+  --lbh-chart-3: #dce3e6;
+  --lbh-chart-axis: #9aa9ae;
+  --lbh-chart-title: #f9f7f4;
+  --lbh-chart-grid: #243f48;
+  --lbh-chart-tooltip-bg: #16272d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --lbh-page: var(--lbh-navy-900);
+    --lbh-card: var(--lbh-navy-800);
+    --lbh-card-border: var(--lbh-navy-700);
+    --lbh-subtle: #1f353d;
+    --lbh-text: #e5ecee;
+    --lbh-heading: var(--lbh-oat);
+    --lbh-text-muted: #9aa9ae;
+    --lbh-header-bg: #0b1a1f;
+    --lbh-header-text: var(--lbh-white);
+    --lbh-header-muted: var(--lbh-grey-300);
+    --lbh-link: #e5ecee;
+    --lbh-code-bg: #1f353d;
+    --lbh-sev-critical-fg: #fda29b;
+    --lbh-sev-critical-bg: #3b1512;
+    --lbh-sev-critical-border: #7a271a;
+    --lbh-sev-warning-fg: #fec84b;
+    --lbh-sev-warning-bg: #3a2a0a;
+    --lbh-sev-warning-border: #7a4b0c;
+    --lbh-sev-info-fg: #84caff;
+    --lbh-sev-info-bg: #0f2a44;
+    --lbh-sev-info-border: #1e4a7a;
+    --lbh-sev-ok-fg: #75e0a7;
+    --lbh-sev-ok-bg: #0b2e1e;
+    --lbh-sev-ok-border: #11583a;
+    --lbh-sev-neutral-fg: #d0d5dd;
+    --lbh-sev-neutral-bg: #1f2a30;
+    --lbh-sev-neutral-border: #344054;
+    --lbh-chart-3: #dce3e6;
+    --lbh-chart-axis: #9aa9ae;
+    --lbh-chart-title: #f9f7f4;
+    --lbh-chart-grid: #243f48;
+    --lbh-chart-tooltip-bg: #16272d;
+  }
+}
+
+/*
+ * 3. AppKit UI mapping. The selector list matches AppKit's own light (:root), dark-class (.dark)
+ * and dark-media (:root:not(.light)) selectors at equal or higher specificity, and this file
+ * loads after AppKit's styles, so these win in every mode.
+ */
+:root,
+:root:not(.light),
+.dark {
+  --radius: var(--lbh-radius);
+  --background: var(--lbh-page);
+  --foreground: var(--lbh-text);
+  --card: var(--lbh-card);
+  --card-foreground: var(--lbh-text);
+  --popover: var(--lbh-card);
+  --popover-foreground: var(--lbh-text);
+  --primary: var(--lbh-primary);
+  --primary-foreground: var(--lbh-primary-text);
+  --secondary: var(--lbh-subtle);
+  --secondary-foreground: var(--lbh-text);
+  --muted: var(--lbh-subtle);
+  --muted-foreground: var(--lbh-text-muted);
+  --accent: var(--lbh-subtle);
+  --accent-foreground: var(--lbh-text);
+  --destructive: var(--lbh-danger);
+  --destructive-foreground: var(--lbh-white);
+  --success: var(--lbh-sev-ok-fg);
+  --success-foreground: var(--lbh-white);
+  --warning: var(--lbh-sev-warning-fg);
+  --warning-foreground: var(--lbh-white);
+  --border: var(--lbh-card-border);
+  --input: var(--lbh-card-border);
+  --ring: var(--lbh-focus);
+
+  --chart-cat-1: var(--lbh-chart-1);
+  --chart-cat-2: var(--lbh-chart-2);
+  --chart-cat-3: var(--lbh-chart-3);
+  --chart-cat-4: var(--lbh-chart-4);
+  --chart-cat-5: var(--lbh-chart-5);
+  --chart-cat-6: var(--lbh-chart-6);
+  --chart-cat-7: var(--lbh-chart-7);
+  --chart-cat-8: var(--lbh-chart-8);
+  --chart-axis-label: var(--lbh-chart-axis);
+  --chart-axis-title: var(--lbh-chart-title);
+  --chart-grid: var(--lbh-chart-grid);
+  --chart-tooltip-bg: var(--lbh-chart-tooltip-bg);
+}
+
+/* Base typography, in the base cascade layer so utility classes still override it. */
+@layer base {
+  html,
+  body {
+    font-family: var(--lbh-font-sans);
+  }
+
+  body {
+    font-size: var(--lbh-text-sm);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--lbh-heading);
+    font-family: var(--lbh-font-sans);
+    letter-spacing: -0.01em;
+  }
+
+  p {
+    line-height: 1.5;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--lbh-font-mono);
+  }
+}

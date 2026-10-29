@@ -1,0 +1,18 @@
+id: seq_scan_read_ratio
+title: "Database reads far more rows than it uses"
+category: indexing
+source: delta
+superseded_by:   # the database-wide ratio is the symptom; seq_scan_heavy names the table to index
+  key: database
+  checks: [seq_scan_heavy]
+thresholds: {warning: 10, critical: 100}
+explain: >
+  rows_returned (rows read, dominated by sequential scans) divided by rows_fetched (rows from index scans) per
+  database over 24 h. A high ratio means missing indexes; see seq_scan_heavy and top_db_time_query.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object, datname,
+         sum(rows_returned) / NULLIF(sum(rows_fetched), 0) AS measure,
+         sum(rows_returned) AS rows_returned, sum(rows_fetched) AS rows_fetched
+  FROM system.lakebase.database_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, datname
+  HAVING sum(rows_returned) > 1000000

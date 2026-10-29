@@ -1,0 +1,15 @@
+id: postgres_errors
+title: "Infrastructure-level Postgres errors"
+category: incidents
+source: delta
+thresholds: {warning: 0, critical: 10}
+explain: >
+  Count of resource, operator, system or internal errors (SQLSTATE 53*, 57P*, 58*, XX*), idle-in-transaction
+  terminations (25P03) and lock-not-available (55P03) in the last 2 hours. Deadlocks are covered separately.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || sqlstate AS object, sqlstate,
+         count(*) AS measure, max(regexp_replace(message, '[0-9]+', 'N')) AS message_pattern, max(ts) AS last_seen
+  FROM system.lakebase.postgres_logs
+  WHERE ts >= current_timestamp() - INTERVAL 2 HOURS AND severity IN ('ERROR', 'FATAL', 'PANIC')
+    AND (sqlstate RLIKE '^(53|57P|58|XX)' OR sqlstate IN ('25P03', '55P03'))
+  GROUP BY project_id, branch_id, endpoint_id, sqlstate

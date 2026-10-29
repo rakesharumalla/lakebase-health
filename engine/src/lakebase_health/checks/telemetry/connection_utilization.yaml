@@ -1,0 +1,22 @@
+id: connection_utilization
+title: "Connections near the compute limit"
+category: capacity
+source: delta
+thresholds: {warning: 70, critical: 85}
+explain: >
+  Peak open backends as a share of max_connections (24 h). Near the limit, new connections fail (53300). Use a
+  client-side pool; with autoscaling the limit follows min(max CU, 8 x min CU), so raise min CU if needed.
+sql: |
+  WITH conn AS (
+    SELECT project_id, branch_id, endpoint_id, compute_id, ts, sum(numbackends) AS backends
+    FROM system.lakebase.database_gauges WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+    GROUP BY project_id, branch_id, endpoint_id, compute_id, ts),
+  lim AS (
+    SELECT compute_id, date_trunc('MINUTE', ts) AS m, max(max_connections) AS max_conn
+    FROM system.lakebase.compute_gauges WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+    GROUP BY compute_id, date_trunc('MINUTE', ts))
+  SELECT conn.project_id, conn.branch_id, conn.endpoint_id, conn.endpoint_id AS object,
+         100.0 * max(conn.backends / NULLIF(lim.max_conn, 0)) AS measure,
+         max(conn.backends) AS peak_backends, max(lim.max_conn) AS max_connections
+  FROM conn JOIN lim ON conn.compute_id = lim.compute_id AND date_trunc('MINUTE', conn.ts) = lim.m
+  GROUP BY conn.project_id, conn.branch_id, conn.endpoint_id

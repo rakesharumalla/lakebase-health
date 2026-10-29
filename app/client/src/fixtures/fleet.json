@@ -1,0 +1,15 @@
+{
+ "projects": [
+  {
+   "project_id": "11111111-2222-4333-8444-555555555555",
+   "project_name": "healthcheck",
+   "critical": "28",
+   "warning": "55",
+   "info": "12",
+   "newest_finding_at": "2026-10-28T14:12:54.840Z",
+   "active_computes": "2",
+   "computes": "2",
+   "enrolled": "1"
+  }
+ ]
+}

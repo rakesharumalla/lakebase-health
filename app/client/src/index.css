@@ -1,0 +1,45 @@
+@import "@databricks/appkit-ui/styles.css";
+
+/* Fonts are bundled (OFL-1.1); nothing loads from a CDN. DM Sans and DM Mono are vendored in ./fonts (see SOURCE.txt). */
+@import "./fonts/dm-sans/latin-400.css";
+@import "./fonts/dm-sans/latin-500.css";
+@import "./fonts/dm-sans/latin-600.css";
+@import "./fonts/dm-sans/latin-700.css";
+@import "./fonts/dm-mono/latin-400.css";
+@import "./fonts/dm-mono/latin-500.css";
+
+/* All colour, type and spacing tokens live here. */
+@import "./theme/tokens.css";
+
+/* Expose the role tokens as Tailwind utilities (bg-navy, text-sev-critical-fg, font-mono, ...). */
+@theme inline {
+  --font-sans: var(--lbh-font-sans);
+  --font-mono: var(--lbh-font-mono);
+  --color-navy: var(--lbh-navy);
+  --color-lava: var(--lbh-lava);
+  --color-coral: var(--lbh-coral);
+  --color-signal-ok: var(--lbh-signal-ok);
+  --color-signal-stale: var(--lbh-signal-stale);
+  --color-oat: var(--lbh-oat);
+  --color-heading: var(--lbh-heading);
+  --color-link: var(--lbh-link);
+  --color-code: var(--lbh-code-bg);
+  --color-header: var(--lbh-header-bg);
+  --color-header-foreground: var(--lbh-header-text);
+  --color-header-muted: var(--lbh-header-muted);
+  --color-sev-critical-fg: var(--lbh-sev-critical-fg);
+  --color-sev-critical-bg: var(--lbh-sev-critical-bg);
+  --color-sev-critical-border: var(--lbh-sev-critical-border);
+  --color-sev-warning-fg: var(--lbh-sev-warning-fg);
+  --color-sev-warning-bg: var(--lbh-sev-warning-bg);
+  --color-sev-warning-border: var(--lbh-sev-warning-border);
+  --color-sev-info-fg: var(--lbh-sev-info-fg);
+  --color-sev-info-bg: var(--lbh-sev-info-bg);
+  --color-sev-info-border: var(--lbh-sev-info-border);
+  --color-sev-ok-fg: var(--lbh-sev-ok-fg);
+  --color-sev-ok-bg: var(--lbh-sev-ok-bg);
+  --color-sev-ok-border: var(--lbh-sev-ok-border);
+  --color-sev-neutral-fg: var(--lbh-sev-neutral-fg);
+  --color-sev-neutral-bg: var(--lbh-sev-neutral-bg);
+  --color-sev-neutral-border: var(--lbh-sev-neutral-border);
+}

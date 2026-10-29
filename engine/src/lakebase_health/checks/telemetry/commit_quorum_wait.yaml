@@ -1,0 +1,27 @@
+id: commit_quorum_wait
+title: "Commits wait for the WAL storage quorum"
+category: incidents
+source: delta
+thresholds: {warning: 2, critical: 5}
+explain: >
+  Longest stretch (seconds) one statement spent in the SyncRep wait in the last 24 hours. The commit is written but
+  the storage quorum (safekeepers) has not acknowledged it yet; normal is a few milliseconds (fleet p99 22 ms).
+  While it waits the session keeps its row locks, so other writers queue behind it and can hit statement timeouts.
+  This is a platform-side delay, not application contention: open a support case with the endpoint ID and the
+  first_seen/last_seen window. hot_row_lock shows which waiters were blocked by these commits.
+sql: |
+  WITH stalls AS (
+    SELECT project_id, branch_id, endpoint_id, pid, unix_millis(ts) - query_age_ms AS query_start_ms,
+           (unix_millis(max(ts)) - unix_millis(min(ts))) / 1000.0 + 1 AS stall_s, min(ts) AS first_ts, max(ts) AS last_ts
+    FROM system.lakebase.active_session_history
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND wait_event = 'SyncRep' AND query_age_ms IS NOT NULL
+    GROUP BY project_id, branch_id, endpoint_id, pid, unix_millis(ts) - query_age_ms
+  )
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, max(stall_s) AS measure,
+         count(*) AS stalled_statements, sum(CASE WHEN stall_s >= 2 THEN 1 ELSE 0 END) AS stalls_over_2s,
+         min(first_ts) AS first_seen, max(last_ts) AS last_seen
+  FROM stalls
+  GROUP BY project_id, branch_id, endpoint_id
+fix:
+  kind: manual
+  risk: safe

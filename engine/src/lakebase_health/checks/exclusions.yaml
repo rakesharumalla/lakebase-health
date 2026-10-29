@@ -1,0 +1,15 @@
+# Lakebase platform objects. Every check excludes these through {excluded_*} tokens.
+slots: [wal_retention_slot, wal_proposer_slot]        # platform physical slots; wal_retention_slot is normally inactive
+users: [cloud_admin]                                   # platform agents (exporter, monitor) connect as this user
+roles: [cloud_admin, databricks_control_plane, databricks_superuser, databricks_monitor, authenticator]   # authenticator = Data API (PostgREST) role
+role_regex: '^(pg_|databricks_)'
+schemas: [pg_catalog, information_schema, pg_toast, hint_plan, sage]   # sage = pg_sage's own schema
+settings_regex: '^(databricks|neon|neon_monitor|compute_ctl|lakebase)\.|^neon_'
+# Query-scoped checks (query_scoped: true) drop telemetry of these roles, matched exactly or by the anchored regex.
+# databricks_writer_<n> = synced-table pipeline writers; cloud_admin, databricks_control_plane, databricks_monitor =
+# platform agents. The engine and fixer service principals are added at run time (--service-roles, and the job's own
+# identity when it is a service principal). authenticator (Data API) and databricks_reader_<n> stay: they carry
+# customer queries.
+query_users: [cloud_admin, databricks_control_plane, databricks_monitor]
+query_user_regex: '^databricks_writer_[0-9]+$'
+query_apps: [lakebase-health, lakebase-health-fixer]   # application_name the engine and fixer connect with

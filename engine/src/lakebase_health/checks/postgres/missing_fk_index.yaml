@@ -1,0 +1,30 @@
+id: missing_fk_index
+title: "Foreign key without a supporting index"
+category: indexing
+source: postgres
+thresholds: {warning: 0, critical: 1073741824}
+explain: >
+  The referencing columns of a foreign key have no index (measure = child table size). Every DELETE or key UPDATE
+  on the parent then scans the child while holding locks, a common cause of lock waits and deadlocks.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(t.relname) || ' (' || cols.list || ')' AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(t.relname) AS child_table, cols.list AS fk_columns,
+         quote_ident(n.nspname) AS index_schema,
+         quote_ident(left(t.relname || '_' || cols.names || '_fk_idx', 63)) AS index_name,
+         c.conname AS constraint_name, pg_relation_size(t.oid)::float8 AS measure
+  FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+  CROSS JOIN LATERAL (
+    SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY array_position(c.conkey, a.attnum)) AS list,
+           string_agg(a.attname, '_' ORDER BY array_position(c.conkey, a.attnum)) AS names
+    FROM pg_attribute a WHERE a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)) cols
+  WHERE c.contype = 'f' AND n.nspname NOT IN {excluded_schemas}
+    AND NOT EXISTS (SELECT 1 FROM pg_index i WHERE i.indrelid = c.conrelid
+                    AND (i.indkey::text || ' ') LIKE array_to_string(c.conkey, ' ') || ' %')
+fix:
+  kind: ddl
+  template: "CREATE INDEX CONCURRENTLY {index_name} ON {child_table} ({fk_columns});"
+  rollback: "DROP INDEX CONCURRENTLY IF EXISTS {index_schema}.{index_name};"
+  risk: moderate
+  reversible: true
+  verify_on_branch: true

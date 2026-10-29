@@ -1,0 +1,19 @@
+id: xid_runway
+title: "Transaction ID age is high"
+category: maintenance
+source: delta
+superseded_by:   # database xid age is the oldest table's age; xid_age_table names the table and the VACUUM FREEZE fix
+  key: database
+  checks: [xid_age_table]
+thresholds: {warning: 200000000, critical: 1000000000}
+explain: >
+  Current age of the oldest unfrozen transaction ID per database, with days until 1.5 billion at the 7-day rate.
+  Remove freeze blockers (xmin_horizon_holder, replication_slot_retention) and VACUUM (FREEZE) the oldest tables.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS object, datname,
+         max_by(oldest_frozen_xid_age, ts) AS measure,
+         (1500000000 - max_by(oldest_frozen_xid_age, ts))
+           / NULLIF(regr_slope(oldest_frozen_xid_age, unix_timestamp(ts)) * 86400, 0) AS days_to_1_5b,
+         max_by(oldest_mxid_age, ts) AS mxid_age
+  FROM system.lakebase.database_gauges WHERE ts >= current_timestamp() - INTERVAL 7 DAYS
+  GROUP BY project_id, branch_id, endpoint_id, datname

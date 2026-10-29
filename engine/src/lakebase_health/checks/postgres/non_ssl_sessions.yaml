@@ -1,0 +1,16 @@
+id: non_ssl_sessions
+title: "Client sessions without SSL"
+category: security
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 0, critical: 10}
+explain: >
+  Remote client sessions not using SSL (platform agents on localhost are excluded). Always connect with
+  sslmode=require.
+sql: |
+  SELECT coalesce(a.usename, '?') || '@' || coalesce(host(a.client_addr), 'local') AS object,
+         count(*)::float8 AS measure
+  FROM pg_stat_ssl s JOIN pg_stat_activity a USING (pid)
+  WHERE a.backend_type = 'client backend' AND NOT s.ssl AND a.usename NOT IN {excluded_users}
+    AND a.client_addr IS DISTINCT FROM '127.0.0.1' AND a.client_addr IS DISTINCT FROM '::1'
+  GROUP BY 1

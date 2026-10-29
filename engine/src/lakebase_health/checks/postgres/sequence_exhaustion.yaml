@@ -1,0 +1,34 @@
+id: sequence_exhaustion
+title: "Sequence or identity column nearing its limit"
+category: forecast
+source: postgres
+thresholds: {warning: 50, critical: 75}
+explain: >
+  Share of the usable range consumed, measured against the column type (an int4 column fails at 2^31-1 even with a
+  bigint sequence). est_days_left uses the insert rate since statistics reset. Migrate to bigint, rehearsed on a branch.
+sql: |
+  WITH seq_cols AS (
+    SELECT n.nspname AS seq_schema, sc.relname AS seq_name,
+           quote_ident(tn.nspname) || '.' || quote_ident(t.relname) AS table_ident, a.attname AS column_name,
+           format_type(a.atttypid, a.atttypmod) AS column_type, t.oid AS table_oid,
+           (CASE a.atttypid WHEN 'int2'::regtype THEN 32767 WHEN 'int4'::regtype THEN 2147483647
+                            ELSE 9223372036854775807 END)::numeric AS column_max
+    FROM pg_depend d
+    JOIN pg_class sc ON sc.oid = d.objid AND sc.relkind = 'S'
+    JOIN pg_namespace n ON n.oid = sc.relnamespace
+    JOIN pg_class t ON t.oid = d.refobjid JOIN pg_namespace tn ON tn.oid = t.relnamespace
+    JOIN pg_attribute a ON a.attrelid = d.refobjid AND a.attnum = d.refobjsubid
+    WHERE d.classid = 'pg_class'::regclass AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a', 'i')
+      AND tn.nspname NOT IN {excluded_schemas})
+  SELECT sc.table_ident || '.' || quote_ident(sc.column_name) AS object, sc.column_type, ps.last_value,
+         least(sc.column_max, ps.max_value::numeric) AS effective_max,
+         (100.0 * ps.last_value / least(sc.column_max, ps.max_value::numeric))::float8 AS measure,
+         ((least(sc.column_max, ps.max_value::numeric) - ps.last_value)
+           / NULLIF(t.n_tup_ins / NULLIF(extract(epoch FROM now() - coalesce(
+               (SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()),
+               pg_postmaster_start_time())), 0), 0) / 86400)::float8 AS est_days_left
+  FROM seq_cols sc
+  JOIN pg_sequences ps ON ps.schemaname = sc.seq_schema AND ps.sequencename = sc.seq_name
+  LEFT JOIN pg_stat_user_tables t ON t.relid = sc.table_oid
+  WHERE ps.last_value IS NOT NULL
+fix: {kind: manual, template: "Migrate {object} to bigint: add a bigint column, backfill in batches, swap in a window; rehearse on a branch.", risk: high}

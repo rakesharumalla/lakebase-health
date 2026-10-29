@@ -1,0 +1,32 @@
+# Analysis only (inventory, checks, record, postcheck) over telemetry the hourly engine job has already ingested.
+# Never reads system.lakebase, so it finishes in a few minutes and can run often or on demand.
+resources:
+  jobs:
+    lakebase_health_analysis:
+      name: lakebase-health-analysis
+      max_concurrent_runs: 1
+      timeout_seconds: 10800  # = RUN_TIMEOUT in jobs/run.py: an older 'running' row no longer holds the run lock
+      run_as:
+        service_principal_name: ${var.engine_sp}
+      schedule:
+        quartz_cron_expression: ${var.analysis_schedule}
+        timezone_id: UTC
+      tasks:
+        - task_key: analyze
+          environment_key: engine
+          python_wheel_task:
+            package_name: lakebase_health
+            entry_point: analyze
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}",
+                         "--engine-enabled", "${var.engine_enabled}",
+                         "--ingest-interval-minutes", "${var.ingest_interval_minutes}",
+                         "--service-roles", "${var.engine_sp},${var.fixer_sp}", "--pii-masking", "${var.pii_masking}"]
+      environments:
+        - environment_key: engine
+          spec:
+            environment_version: "3"
+            dependencies:
+              - ../engine/dist/*.whl
+              - psycopg[binary]>=3.1
+              - databricks-sdk>=0.81.0
+              - pyyaml>=6

@@ -1,0 +1,17 @@
+id: lock_blocking_history
+title: "Sessions were blocked by other sessions"
+category: incidents
+source: delta
+superseded_by:   # a live blocked session is the same blocking, with the blocker pid to act on
+  key: endpoint
+  checks: [blocked_session]
+thresholds: {warning: 60, critical: 300}
+explain: >
+  Longest time (seconds) a sampled session spent blocked by another session in the last 2 hours. Usually an
+  idle-in-transaction session holding a row lock. Set idle_in_transaction_session_timeout and lock_timeout.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         max(query_age_ms) / 1000.0 AS measure, count(DISTINCT pid) AS blocked_pids, count(*) AS samples
+  FROM system.lakebase.active_session_history
+  WHERE ts >= current_timestamp() - INTERVAL 2 HOURS AND blocking_pid IS NOT NULL AND blocking_pid <> 0
+  GROUP BY project_id, branch_id, endpoint_id

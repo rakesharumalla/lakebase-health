@@ -1,0 +1,14 @@
+id: table_without_pk
+title: "Table without a primary key"
+category: schema
+source: postgres
+thresholds: {info: -1, warning: 104857600}
+explain: >
+  Tables without a primary key cannot be safely replicated or synced (logical replication, CDC) and are prone to
+  duplicates. measure = table size; warning above 100 MB.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object, pg_relation_size(c.oid)::float8 AS measure
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind = 'r' AND n.nspname NOT IN {excluded_schemas}
+    AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = c.oid AND contype = 'p')
+fix: {kind: manual, template: "Add a primary key to {object} (or a unique NOT NULL key).", risk: moderate}

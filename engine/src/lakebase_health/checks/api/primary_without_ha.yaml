@@ -1,0 +1,9 @@
+id: primary_without_ha
+title: "Primary compute has no high-availability secondary"
+category: backup
+source: api
+function: primary_without_ha
+thresholds: {info: 0}
+explain: >
+  The default branch's read-write compute runs without HA secondaries. For production, configure an HA group
+  (min >= 2) so a failure fails over automatically.

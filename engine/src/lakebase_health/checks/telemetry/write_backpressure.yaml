@@ -1,0 +1,13 @@
+id: write_backpressure
+title: "Storage throttled writes"
+category: capacity
+source: delta
+thresholds: {warning: 0, critical: 600}
+explain: >
+  Seconds in the last 24 h during which storage throttled writes because WAL volume exceeded what it could absorb.
+  Batch bulk loads, prefer COPY, drop unused indexes, and split huge UPDATE/DELETE statements.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object,
+         sum(backpressure_throttling_seconds) AS measure, sum(host_disk_written_bytes) AS disk_written_bytes
+  FROM system.lakebase.compute_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id

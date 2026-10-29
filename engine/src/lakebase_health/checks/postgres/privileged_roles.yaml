@@ -1,0 +1,15 @@
+id: privileged_roles
+title: "Login role with powerful attributes"
+category: security
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {info: 0, warning: 1}
+explain: >
+  A login role (not platform-managed) with BYPASSRLS, REPLICATION or CREATEROLE (measure = number of these).
+  Keep such roles few and audited; use group roles for least privilege.
+sql: |
+  SELECT quote_ident(rolname) AS object, rolcreaterole, rolcreatedb, rolbypassrls, rolreplication,
+         (rolbypassrls::int + rolreplication::int + rolcreaterole::int)::float8 AS measure
+  FROM pg_roles
+  WHERE rolcanlogin AND rolname !~ {excluded_role_regex} AND rolname NOT IN {excluded_roles}
+    AND (rolbypassrls OR rolreplication OR rolcreaterole)

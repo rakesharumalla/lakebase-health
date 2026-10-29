@@ -1,0 +1,16 @@
+id: idle_in_transaction
+title: "Session idle inside an open transaction"
+category: incidents
+source: postgres
+per_database: false   # instance-wide catalog: one result per endpoint, not one per database
+thresholds: {warning: 60, critical: 300}
+explain: >
+  A session that opened a transaction and went idle (seconds in that state). It holds its locks and snapshot,
+  blocking writers and vacuum. Lower idle_in_transaction_session_timeout and fix the application.
+sql: |
+  SELECT 'pid ' || pid AS object, pid, usename, application_name,
+         extract(epoch FROM now() - state_change)::float8 AS measure,
+         extract(epoch FROM now() - xact_start)::float8 AS xact_age_s, left(query, 200) AS query_text
+  FROM pg_stat_activity
+  WHERE state LIKE 'idle in transaction%' AND pid <> pg_backend_pid() AND usename NOT IN {excluded_users}
+fix: {kind: manual, template: "After confirming with the session owner: SELECT pg_terminate_backend({pid});", risk: high}

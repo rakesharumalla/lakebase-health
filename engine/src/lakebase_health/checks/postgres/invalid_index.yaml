@@ -1,0 +1,14 @@
+id: invalid_index
+title: "Invalid index left by a failed build"
+category: indexing
+source: postgres
+thresholds: {warning: 0}
+explain: >
+  An index marked invalid (usually a failed CREATE INDEX CONCURRENTLY). It is maintained on every write but never
+  used for reads. Drop it, or rebuild it with REINDEX INDEX CONCURRENTLY after fixing the cause.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS index_ident, 1.0::float8 AS measure
+  FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE NOT i.indisvalid AND n.nspname NOT IN {excluded_schemas}
+fix: {kind: manual, template: "DROP INDEX CONCURRENTLY {index_ident};  -- or: REINDEX INDEX CONCURRENTLY {index_ident};", risk: moderate}

@@ -1,0 +1,25 @@
+id: query_regression
+title: "Query got slower than its baseline"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 1.5, critical: 2}
+explain: >
+  Mean latency in the last 24 h divided by the previous 6 days, per endpoint and query (>= 50 calls in each
+  window). Correlate with recent DDL and statistics; fix with ANALYZE / CREATE STATISTICS before pinning plans.
+sql: |
+  WITH w AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, max(query) AS query_text,
+           CASE WHEN ts >= current_timestamp() - INTERVAL 24 HOURS THEN 'recent' ELSE 'baseline' END AS win,
+           sum(calls) AS calls, sum(total_exec_time) AS t
+    FROM system.lakebase.pg_stat_statements_counters
+    WHERE ts >= current_timestamp() - INTERVAL 7 DAYS AND toplevel
+    GROUP BY project_id, branch_id, endpoint_id, queryid,
+             CASE WHEN ts >= current_timestamp() - INTERVAL 24 HOURS THEN 'recent' ELSE 'baseline' END)
+  SELECT r.project_id, r.branch_id, r.endpoint_id, CAST(r.queryid AS STRING) AS object, CAST(r.queryid AS STRING) AS queryid, r.query_text,
+         b.t / NULLIF(b.calls, 0) AS baseline_mean_ms, r.t / NULLIF(r.calls, 0) AS recent_mean_ms,
+         r.calls AS recent_calls,
+         (r.t / NULLIF(r.calls, 0)) / NULLIF(b.t / NULLIF(b.calls, 0), 0) AS measure
+  FROM w r JOIN w b ON r.endpoint_id = b.endpoint_id AND r.queryid = b.queryid
+                   AND r.win = 'recent' AND b.win = 'baseline'
+  WHERE r.calls >= 50 AND b.calls >= 50

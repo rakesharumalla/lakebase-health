@@ -1,0 +1,15 @@
+id: storage_wait
+title: "Query waits on remote storage"
+category: performance
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 10, critical: 30}
+explain: >
+  Average share of a query's duration spent waiting on pageserver reads after local cache misses (24 h, >= 10
+  executions). Index it so it reads fewer pages, enlarge the cache (min CU), or pg_prewarm hot tables.
+sql: |
+  SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
+         count(*) AS execs, avg(duration_ms) AS avg_ms,
+         100 * avg(neon_getpage_wait_us / 1000.0 / NULLIF(duration_ms, 0)) AS measure
+  FROM system.lakebase.plan_history WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, queryid HAVING count(*) >= 10

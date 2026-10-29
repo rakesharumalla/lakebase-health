@@ -1,0 +1,1903 @@
+{
+ "project": {
+  "id": "11111111-2222-4333-8444-555555555555",
+  "name": "healthcheck"
+ },
+ "counts": {
+  "critical": 28,
+  "warning": 52,
+  "info": 12,
+  "resolved": 11
+ },
+ "sections": [
+  {
+   "category": "backup",
+   "total": 2,
+   "rows": [
+    {
+     "key": "f:656387944848bd6f2f2f073cc0adfe39",
+     "kind": "finding",
+     "endpoint_id": null,
+     "queryid": null,
+     "fingerprint": "656387944848bd6f2f2f073cc0adfe39",
+     "check_id": "default_branch_unprotected",
+     "title": "Default (production) branch is not protected",
+     "category": "backup",
+     "object": "healthcheck/production",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "656387944848bd6f2f2f073cc0adfe39",
+       "check_id": "default_branch_unprotected",
+       "label": "default branch unprotected",
+       "severity": "warning",
+       "status": "open",
+       "title": "Default (production) branch is not protected"
+      }
+     ]
+    },
+    {
+     "key": "f:fc4fb4ca52a64a994767cccdcadb2221",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "fc4fb4ca52a64a994767cccdcadb2221",
+     "check_id": "primary_without_ha",
+     "title": "Primary compute has no high-availability secondary",
+     "category": "backup",
+     "object": "healthcheck/production",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "fc4fb4ca52a64a994767cccdcadb2221",
+       "check_id": "primary_without_ha",
+       "label": "primary without ha",
+       "severity": "info",
+       "status": "open",
+       "title": "Primary compute has no high-availability secondary"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "capacity",
+   "total": 4,
+   "rows": [
+    {
+     "key": "f:e5027c79519855a800aec57965cf9121",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "e5027c79519855a800aec57965cf9121",
+     "check_id": "buffer_hit_rate",
+     "title": "Postgres buffer cache hit rate low",
+     "category": "capacity",
+     "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 85.31648334611234,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "e5027c79519855a800aec57965cf9121",
+       "check_id": "buffer_hit_rate",
+       "label": "buffer hit rate",
+       "severity": "warning",
+       "status": "open",
+       "title": "Postgres buffer cache hit rate low"
+      }
+     ]
+    },
+    {
+     "key": "f:20164cdb701350c94d8a7f5721986405",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "20164cdb701350c94d8a7f5721986405",
+     "check_id": "write_backpressure",
+     "title": "Storage throttled writes",
+     "category": "capacity",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 51.093486999999996,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "20164cdb701350c94d8a7f5721986405",
+       "check_id": "write_backpressure",
+       "label": "write backpressure",
+       "severity": "warning",
+       "status": "open",
+       "title": "Storage throttled writes"
+      }
+     ]
+    },
+    {
+     "key": "f:098ca7b8c1e9891f6a53a7a441e7d6f5",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-replica-e5f6g7h8",
+     "queryid": null,
+     "fingerprint": "098ca7b8c1e9891f6a53a7a441e7d6f5",
+     "check_id": "cu_sizing",
+     "title": "Compute size does not match the workload",
+     "category": "capacity",
+     "object": "ep-sample-replica-e5f6g7h8",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 2,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "098ca7b8c1e9891f6a53a7a441e7d6f5",
+       "check_id": "cu_sizing",
+       "label": "cu sizing",
+       "severity": "warning",
+       "status": "open",
+       "title": "Compute size does not match the workload"
+      }
+     ]
+    },
+    {
+     "key": "f:f16f51df3755f30fde3ca2d67d39ac64",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "f16f51df3755f30fde3ca2d67d39ac64",
+     "check_id": "cu_sizing",
+     "title": "Compute size does not match the workload",
+     "category": "capacity",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "f16f51df3755f30fde3ca2d67d39ac64",
+       "check_id": "cu_sizing",
+       "label": "cu sizing",
+       "severity": "info",
+       "status": "open",
+       "title": "Compute size does not match the workload"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "config",
+   "total": 2,
+   "rows": [
+    {
+     "key": "f:6cfe615bda495871da121145020d5f5d",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "6cfe615bda495871da121145020d5f5d",
+     "check_id": "guardrail_settings",
+     "title": "Guardrail setting missing or too loose",
+     "category": "config",
+     "object": "databricks_postgres:databricks_postgres:idle_in_transaction_session_timeout",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 2,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "6cfe615bda495871da121145020d5f5d",
+       "check_id": "guardrail_settings",
+       "label": "guardrail settings",
+       "severity": "warning",
+       "status": "open",
+       "title": "Guardrail setting missing or too loose"
+      }
+     ]
+    },
+    {
+     "key": "f:dda403f5c6d7d214e2eb5a008fc7fc3e",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "dda403f5c6d7d214e2eb5a008fc7fc3e",
+     "check_id": "guardrail_settings",
+     "title": "Guardrail setting missing or too loose",
+     "category": "config",
+     "object": "databricks_postgres:databricks_postgres:track_io_timing",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "dda403f5c6d7d214e2eb5a008fc7fc3e",
+       "check_id": "guardrail_settings",
+       "label": "guardrail settings",
+       "severity": "info",
+       "status": "open",
+       "title": "Guardrail setting missing or too loose"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "connectivity",
+   "total": 1,
+   "rows": [
+    {
+     "key": "f:2cccc284d925158768cab7c912d0e584",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "2cccc284d925158768cab7c912d0e584",
+     "check_id": "connection_drops",
+     "title": "Client connections dropped (SSL EOF, resets)",
+     "category": "connectivity",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 60,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "2cccc284d925158768cab7c912d0e584",
+       "check_id": "connection_drops",
+       "label": "connection drops",
+       "severity": "info",
+       "status": "open",
+       "title": "Client connections dropped (SSL EOF, resets)"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "forecast",
+   "total": 1,
+   "rows": [
+    {
+     "key": "f:b2b2142a1bf2dd06e78f2cdcce1c8c1a",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "b2b2142a1bf2dd06e78f2cdcce1c8c1a",
+     "check_id": "sequence_exhaustion",
+     "title": "Sequence or identity column nearing its limit",
+     "category": "forecast",
+     "object": "databricks_postgres:hc_test.orders.id",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 74.55263402059332,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "b2b2142a1bf2dd06e78f2cdcce1c8c1a",
+       "check_id": "sequence_exhaustion",
+       "label": "sequence exhaustion",
+       "severity": "warning",
+       "status": "open",
+       "title": "Sequence or identity column nearing its limit"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "incidents",
+   "total": 8,
+   "rows": [
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-4281100324388517746",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-4281100324388517746",
+     "fingerprint": "df93f760b227910c6854998fcc84862f",
+     "check_id": "hot_row_lock",
+     "title": "Writes wait on a row lock",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4/-4281100324388517746",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 89.991,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "df93f760b227910c6854998fcc84862f",
+       "check_id": "hot_row_lock",
+       "label": "row lock wait",
+       "severity": "critical",
+       "status": "open",
+       "title": "Writes wait on a row lock"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-3196267159430279274",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-3196267159430279274",
+     "fingerprint": "e1472ab887bcf5b28595e4eba4fa6f20",
+     "check_id": "hot_row_lock",
+     "title": "Writes wait on a row lock",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4/-3196267159430279274",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 89.762,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "e1472ab887bcf5b28595e4eba4fa6f20",
+       "check_id": "hot_row_lock",
+       "label": "row lock wait",
+       "severity": "critical",
+       "status": "open",
+       "title": "Writes wait on a row lock"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-4564332954916989246",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-4564332954916989246",
+     "fingerprint": "554b95ca0f864a0f3f1b74017b2f662f",
+     "check_id": "hot_row_lock",
+     "title": "Writes wait on a row lock",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4/-4564332954916989246",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 89.701,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "554b95ca0f864a0f3f1b74017b2f662f",
+       "check_id": "hot_row_lock",
+       "label": "row lock wait",
+       "severity": "critical",
+       "status": "open",
+       "title": "Writes wait on a row lock"
+      }
+     ]
+    },
+    {
+     "key": "f:366531ececd35d1fb93a0e253b979441",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "366531ececd35d1fb93a0e253b979441",
+     "check_id": "deadlocks",
+     "title": "Deadlocks detected",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T01:28:30.286Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 6,
+     "measure": 12,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "366531ececd35d1fb93a0e253b979441",
+       "check_id": "deadlocks",
+       "label": "deadlocks",
+       "severity": "critical",
+       "status": "open",
+       "title": "Deadlocks detected"
+      }
+     ]
+    },
+    {
+     "key": "f:acf10e4a2374b0053c3edc90953f6c33",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "acf10e4a2374b0053c3edc90953f6c33",
+     "check_id": "lock_blocking_history",
+     "title": "Sessions were blocked by other sessions",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T02:04:14.155Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 5,
+     "measure": 89.402,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "acf10e4a2374b0053c3edc90953f6c33",
+       "check_id": "lock_blocking_history",
+       "label": "lock blocking history",
+       "severity": "warning",
+       "status": "open",
+       "title": "Sessions were blocked by other sessions"
+      }
+     ]
+    },
+    {
+     "key": "f:11e6306aa01afe164ae47a4cffac25af",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "11e6306aa01afe164ae47a4cffac25af",
+     "check_id": "statement_timeouts",
+     "title": "Statements cancelled by statement_timeout",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 21,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "11e6306aa01afe164ae47a4cffac25af",
+       "check_id": "statement_timeouts",
+       "label": "statement timeouts",
+       "severity": "warning",
+       "status": "open",
+       "title": "Statements cancelled by statement_timeout"
+      }
+     ]
+    },
+    {
+     "key": "f:93b518305a0572b47a0b806dd0cdff2a",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "93b518305a0572b47a0b806dd0cdff2a",
+     "check_id": "lock_wait_share",
+     "title": "Lock waits are a large share of wait time",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 20.906039305596313,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "93b518305a0572b47a0b806dd0cdff2a",
+       "check_id": "lock_wait_share",
+       "label": "lock wait share",
+       "severity": "warning",
+       "status": "open",
+       "title": "Lock waits are a large share of wait time"
+      }
+     ]
+    },
+    {
+     "key": "f:a4791f8dd0de9ee8188547acbb5c3232",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "a4791f8dd0de9ee8188547acbb5c3232",
+     "check_id": "idle_in_tx_time",
+     "title": "Sessions spend a lot of time idle in transaction",
+     "category": "incidents",
+     "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 9.545242997841065,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "a4791f8dd0de9ee8188547acbb5c3232",
+       "check_id": "idle_in_tx_time",
+       "label": "idle in tx time",
+       "severity": "warning",
+       "status": "open",
+       "title": "Sessions spend a lot of time idle in transaction"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "indexing",
+   "total": 16,
+   "rows": [
+    {
+     "key": "f:b9701f1bfe16e14ef221dc974c14dab7",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "b9701f1bfe16e14ef221dc974c14dab7",
+     "check_id": "seq_scan_read_ratio",
+     "title": "Database reads far more rows than it uses",
+     "category": "indexing",
+     "object": "ep-sample-primary-a1b2c3d4/databricks_postgres",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 2428.5123690521086,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "b9701f1bfe16e14ef221dc974c14dab7",
+       "check_id": "seq_scan_read_ratio",
+       "label": "seq scan read ratio",
+       "severity": "critical",
+       "status": "open",
+       "title": "Database reads far more rows than it uses"
+      }
+     ]
+    },
+    {
+     "key": "f:9eab0aa901a87e709d151b828817d1dc",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "9eab0aa901a87e709d151b828817d1dc",
+     "check_id": "gin_pending_list",
+     "title": "GIN index pending list near its limit",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.kv_value_trgm",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 94.53125,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "9eab0aa901a87e709d151b828817d1dc",
+       "check_id": "gin_pending_list",
+       "label": "gin pending list",
+       "severity": "critical",
+       "status": "open",
+       "title": "GIN index pending list near its limit"
+      }
+     ]
+    },
+    {
+     "key": "f:0f7facc134f2d593116009c11fb3da95",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "0f7facc134f2d593116009c11fb3da95",
+     "check_id": "unused_index",
+     "title": "Index never used",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.kv_value_trgm",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "low",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 279060480,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "0f7facc134f2d593116009c11fb3da95",
+       "check_id": "unused_index",
+       "label": "unused index",
+       "severity": "warning",
+       "status": "open",
+       "title": "Index never used"
+      }
+     ]
+    },
+    {
+     "key": "f:63b29678831e2c3688909a000811f720",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "63b29678831e2c3688909a000811f720",
+     "check_id": "missing_fk_index",
+     "title": "Foreign key without a supporting index",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.orders (customer_id)",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 139001856,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "63b29678831e2c3688909a000811f720",
+       "check_id": "missing_fk_index",
+       "label": "missing fk index",
+       "severity": "warning",
+       "status": "open",
+       "title": "Foreign key without a supporting index"
+      }
+     ]
+    },
+    {
+     "key": "f:cc59509434e9e437c838cc12b394bafa",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "cc59509434e9e437c838cc12b394bafa",
+     "check_id": "duplicate_index",
+     "title": "Duplicate index",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.customers_email_idx2",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 14229504,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "cc59509434e9e437c838cc12b394bafa",
+       "check_id": "duplicate_index",
+       "label": "duplicate index",
+       "severity": "warning",
+       "status": "open",
+       "title": "Duplicate index"
+      }
+     ]
+    },
+    {
+     "key": "f:49c24e0f638324c6d582a8dd4d909681",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "49c24e0f638324c6d582a8dd4d909681",
+     "check_id": "redundant_index",
+     "title": "Index covered by a wider index",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.customers_region_idx",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1327104,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "49c24e0f638324c6d582a8dd4d909681",
+       "check_id": "redundant_index",
+       "label": "redundant index",
+       "severity": "warning",
+       "status": "open",
+       "title": "Index covered by a wider index"
+      }
+     ]
+    },
+    {
+     "key": "f:ae47cf355bc3ee62aaefee417f00651e",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "ae47cf355bc3ee62aaefee417f00651e",
+     "check_id": "seq_scan_heavy",
+     "title": "Table read mostly by large sequential scans",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.orders",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 343309.31684535946,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "ae47cf355bc3ee62aaefee417f00651e",
+       "check_id": "seq_scan_heavy",
+       "label": "seq scan heavy",
+       "severity": "warning",
+       "status": "open",
+       "title": "Table read mostly by large sequential scans"
+      }
+     ]
+    },
+    {
+     "key": "f:2d5818b4384c3058177956b13364782d",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "2d5818b4384c3058177956b13364782d",
+     "check_id": "seq_scan_heavy",
+     "title": "Table read mostly by large sequential scans",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.customers",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 70967.74193548386,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "2d5818b4384c3058177956b13364782d",
+       "check_id": "seq_scan_heavy",
+       "label": "seq scan heavy",
+       "severity": "warning",
+       "status": "open",
+       "title": "Table read mostly by large sequential scans"
+      }
+     ]
+    },
+    {
+     "key": "f:e45981fdccff308d6a010339777537e3",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "e45981fdccff308d6a010339777537e3",
+     "check_id": "seq_scan_heavy",
+     "title": "Table read mostly by large sequential scans",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.kv_store",
+     "severity": "warning",
+     "status": "new",
+     "confidence": "high",
+     "first_seen": "2026-10-28T14:12:54.840Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 1,
+     "measure": 17414,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "e45981fdccff308d6a010339777537e3",
+       "check_id": "seq_scan_heavy",
+       "label": "seq scan heavy",
+       "severity": "warning",
+       "status": "new",
+       "title": "Table read mostly by large sequential scans"
+      }
+     ]
+    },
+    {
+     "key": "f:544a0eb933c09f039b08880d1021dd01",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "544a0eb933c09f039b08880d1021dd01",
+     "check_id": "invalid_index",
+     "title": "Invalid index left by a failed build",
+     "category": "indexing",
+     "object": "databricks_postgres:hc_test.orders_status_uq",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "544a0eb933c09f039b08880d1021dd01",
+       "check_id": "invalid_index",
+       "label": "invalid index",
+       "severity": "warning",
+       "status": "open",
+       "title": "Invalid index left by a failed build"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "maintenance",
+   "total": 5,
+   "rows": [
+    {
+     "key": "f:2e4904b0cc2383ed6c038c72d58059bc",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "2e4904b0cc2383ed6c038c72d58059bc",
+     "check_id": "autovacuum_blocker",
+     "title": "Dead tuples pile up because something blocks vacuum",
+     "category": "maintenance",
+     "object": "databricks_postgres:hc_test.orders",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 32.60136505410875,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "2e4904b0cc2383ed6c038c72d58059bc",
+       "check_id": "autovacuum_blocker",
+       "label": "autovacuum blocker",
+       "severity": "critical",
+       "status": "open",
+       "title": "Dead tuples pile up because something blocks vacuum"
+      }
+     ]
+    },
+    {
+     "key": "f:70c8b6fef52ca1de5e6ddcb54a8ba1f8",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "70c8b6fef52ca1de5e6ddcb54a8ba1f8",
+     "check_id": "dead_tuples",
+     "title": "High share of dead tuples",
+     "category": "maintenance",
+     "object": "databricks_postgres:hc_test.orders",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 32.60136505410875,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "70c8b6fef52ca1de5e6ddcb54a8ba1f8",
+       "check_id": "dead_tuples",
+       "label": "dead tuples",
+       "severity": "critical",
+       "status": "open",
+       "title": "High share of dead tuples"
+      }
+     ]
+    },
+    {
+     "key": "f:01318493167deb0aca890cc13af198ef",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "01318493167deb0aca890cc13af198ef",
+     "check_id": "table_bloat",
+     "title": "Table bloat",
+     "category": "maintenance",
+     "object": "databricks_postgres:hc_test.orders",
+     "severity": "warning",
+     "status": "new",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T00:35:17.079Z",
+     "occurrences": 1,
+     "measure": 26.329198725278793,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "01318493167deb0aca890cc13af198ef",
+       "check_id": "table_bloat",
+       "label": "table bloat",
+       "severity": "warning",
+       "status": "new",
+       "title": "Table bloat"
+      }
+     ]
+    },
+    {
+     "key": "f:24d7102eda57e7c127ac532b0b2477d2",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "24d7102eda57e7c127ac532b0b2477d2",
+     "check_id": "autovacuum_disabled",
+     "title": "Autovacuum disabled on a table",
+     "category": "maintenance",
+     "object": "databricks_postgres:hc_test.orders",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "24d7102eda57e7c127ac532b0b2477d2",
+       "check_id": "autovacuum_disabled",
+       "label": "autovacuum disabled",
+       "severity": "warning",
+       "status": "open",
+       "title": "Autovacuum disabled on a table"
+      }
+     ]
+    },
+    {
+     "key": "f:4a1dc0d1ceed903f906af9c60daa35ec",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "4a1dc0d1ceed903f906af9c60daa35ec",
+     "check_id": "autovacuum_disabled",
+     "title": "Autovacuum disabled on a table",
+     "category": "maintenance",
+     "object": "databricks_postgres:hc_test.kv_store",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "4a1dc0d1ceed903f906af9c60daa35ec",
+       "check_id": "autovacuum_disabled",
+       "label": "autovacuum disabled",
+       "severity": "warning",
+       "status": "open",
+       "title": "Autovacuum disabled on a table"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "performance",
+   "total": 48,
+   "rows": [
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-5273821145808649494",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-5273821145808649494",
+     "fingerprint": "23260f61a60dd6e7105f47070cb7b2ce",
+     "check_id": "sort_limit_waste",
+     "title": "Sort reads far more rows than the LIMIT returns",
+     "category": "performance",
+     "object": "-5273821145808649494",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 184265.4,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "23260f61a60dd6e7105f47070cb7b2ce",
+       "check_id": "sort_limit_waste",
+       "label": "sort + limit waste",
+       "severity": "critical",
+       "status": "open",
+       "title": "Sort reads far more rows than the LIMIT returns"
+      },
+      {
+       "fingerprint": "d7e78831a618552a58b7ceb255b86bdf",
+       "check_id": "disk_spill",
+       "label": "disk spill",
+       "severity": "warning",
+       "status": "open",
+       "title": "Query spills sorts or hashes to disk"
+      },
+      {
+       "fingerprint": "5f0c1e2d3a4b5c6d7e8f90a1b2c3d4e5",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "warning",
+       "status": "new",
+       "title": "Row estimates far off for 4 queries"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-5537227475067491256",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-5537227475067491256",
+     "fingerprint": "9fb6a0d8ebd51ca0cb9ae45cc6d8b869",
+     "check_id": "sort_limit_waste",
+     "title": "Sort reads far more rows than the LIMIT returns",
+     "category": "performance",
+     "object": "-5537227475067491256",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T01:28:30.286Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 7,
+     "measure": 181443,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "9fb6a0d8ebd51ca0cb9ae45cc6d8b869",
+       "check_id": "sort_limit_waste",
+       "label": "sort + limit waste",
+       "severity": "critical",
+       "status": "open",
+       "title": "Sort reads far more rows than the LIMIT returns"
+      },
+      {
+       "fingerprint": "a64ffba96cd349a0039c9d29b36e6a82",
+       "check_id": "disk_spill",
+       "label": "disk spill",
+       "severity": "warning",
+       "status": "open",
+       "title": "Query spills sorts or hashes to disk"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-4739626815463180053",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-4739626815463180053",
+     "fingerprint": "97d725e3ed5578da19bded7a3aa4c835",
+     "check_id": "sort_limit_waste",
+     "title": "Sort reads far more rows than the LIMIT returns",
+     "category": "performance",
+     "object": "-4739626815463180053",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 181080.8,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "97d725e3ed5578da19bded7a3aa4c835",
+       "check_id": "sort_limit_waste",
+       "label": "sort + limit waste",
+       "severity": "critical",
+       "status": "open",
+       "title": "Sort reads far more rows than the LIMIT returns"
+      },
+      {
+       "fingerprint": "175d3383b47f4d393cd53ea7715c10f4",
+       "check_id": "disk_spill",
+       "label": "disk spill",
+       "severity": "warning",
+       "status": "open",
+       "title": "Query spills sorts or hashes to disk"
+      },
+      {
+       "fingerprint": "5f0c1e2d3a4b5c6d7e8f90a1b2c3d4e5",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "warning",
+       "status": "new",
+       "title": "Row estimates far off for 4 queries"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-4158454350075717392",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-4158454350075717392",
+     "fingerprint": "73f799f61145636a9c06c6f50d852938",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "-4158454350075717392",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 16000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "73f799f61145636a9c06c6f50d852938",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-651696898984279785",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-651696898984279785",
+     "fingerprint": "0ae9847af7966c9f2176698bbba37417",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "-651696898984279785",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "0ae9847af7966c9f2176698bbba37417",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:-653352816085218349",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "-653352816085218349",
+     "fingerprint": "c8d34717588e89119b151a5d5508b29d",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "-653352816085218349",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "c8d34717588e89119b151a5d5508b29d",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:3856000943577260560",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "3856000943577260560",
+     "fingerprint": "47f3af996efac7fc8a0ac1057a4edd75",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "3856000943577260560",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "47f3af996efac7fc8a0ac1057a4edd75",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:5762335516805663297",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "5762335516805663297",
+     "fingerprint": "00157b8bdcda95c15124d522b8eb4b1c",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "5762335516805663297",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "00157b8bdcda95c15124d522b8eb4b1c",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:9091903754222755030",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "9091903754222755030",
+     "fingerprint": "77d83d612d66e48cdf72970f71b1d154",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "9091903754222755030",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1000,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "77d83d612d66e48cdf72970f71b1d154",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    },
+    {
+     "key": "q:ep-sample-primary-a1b2c3d4:8861607536902656119",
+     "kind": "query",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": "8861607536902656119",
+     "fingerprint": "1dd9f1586331404e40a6c444cf6a589e",
+     "check_id": "row_misestimate",
+     "title": "Planner row estimates are far off",
+     "category": "performance",
+     "object": "8861607536902656119",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 820,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "1dd9f1586331404e40a6c444cf6a589e",
+       "check_id": "row_misestimate",
+       "label": "row estimates",
+       "severity": "critical",
+       "status": "open",
+       "title": "Planner row estimates are far off"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "replication",
+   "total": 1,
+   "rows": [
+    {
+     "key": "f:11d3098cc6ac2e3b555c99b3ee877d8f",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-replica-e5f6g7h8",
+     "queryid": null,
+     "fingerprint": "11d3098cc6ac2e3b555c99b3ee877d8f",
+     "check_id": "replica_lag",
+     "title": "Read replica lags behind the primary",
+     "category": "replication",
+     "object": "ep-sample-replica-e5f6g7h8",
+     "severity": "critical",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T13:48:07.058Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 2,
+     "measure": 43.138132,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "11d3098cc6ac2e3b555c99b3ee877d8f",
+       "check_id": "replica_lag",
+       "label": "replica lag",
+       "severity": "critical",
+       "status": "open",
+       "title": "Read replica lags behind the primary"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "schema",
+   "total": 1,
+   "rows": [
+    {
+     "key": "f:0559ba2f2e104676a88a1a0771aaf004",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "0559ba2f2e104676a88a1a0771aaf004",
+     "check_id": "table_without_pk",
+     "title": "Table without a primary key",
+     "category": "schema",
+     "object": "databricks_postgres:hc_test.audit_events",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 770048,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "0559ba2f2e104676a88a1a0771aaf004",
+       "check_id": "table_without_pk",
+       "label": "table without pk",
+       "severity": "info",
+       "status": "open",
+       "title": "Table without a primary key"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "category": "security",
+   "total": 3,
+   "rows": [
+    {
+     "key": "f:c753f50983fed38ef17241453ef32e19",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "c753f50983fed38ef17241453ef32e19",
+     "check_id": "privileged_roles",
+     "title": "Login role with powerful attributes",
+     "category": "security",
+     "object": "databricks_postgres:\"user@example.com\"",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 3,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "c753f50983fed38ef17241453ef32e19",
+       "check_id": "privileged_roles",
+       "label": "privileged roles",
+       "severity": "warning",
+       "status": "open",
+       "title": "Login role with powerful attributes"
+      }
+     ]
+    },
+    {
+     "key": "f:72f807d16569d750ea1ce742aa80c979",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "72f807d16569d750ea1ce742aa80c979",
+     "check_id": "public_schema_create",
+     "title": "Any role can create objects in a schema",
+     "category": "security",
+     "object": "databricks_postgres:hc_test",
+     "severity": "warning",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T00:35:17.079Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 8,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "72f807d16569d750ea1ce742aa80c979",
+       "check_id": "public_schema_create",
+       "label": "public schema create",
+       "severity": "warning",
+       "status": "open",
+       "title": "Any role can create objects in a schema"
+      }
+     ]
+    },
+    {
+     "key": "f:f40d56db4958b584f1a4a2074887b477",
+     "kind": "finding",
+     "endpoint_id": "ep-sample-primary-a1b2c3d4",
+     "queryid": null,
+     "fingerprint": "f40d56db4958b584f1a4a2074887b477",
+     "check_id": "privileged_roles",
+     "title": "Login role with powerful attributes",
+     "category": "security",
+     "object": "databricks_postgres:\"00000000-0000-4000-8000-0000000000e1\"",
+     "severity": "info",
+     "status": "open",
+     "confidence": "high",
+     "first_seen": "2026-10-28T02:58:28.673Z",
+     "last_seen": "2026-10-28T14:12:54.840Z",
+     "occurrences": 4,
+     "measure": 1,
+     "db_ms": null,
+     "resolved_at": null,
+     "issues": [
+      {
+       "fingerprint": "f40d56db4958b584f1a4a2074887b477",
+       "check_id": "privileged_roles",
+       "label": "privileged roles",
+       "severity": "info",
+       "status": "open",
+       "title": "Login role with powerful attributes"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "resolved": {
+  "total": 11,
+  "rows": [
+   {
+    "key": "f:8c073f57d18c1371448649ffda70baf8",
+    "kind": "finding",
+    "endpoint_id": "ep-holy-sun-d28ly9sh",
+    "queryid": null,
+    "fingerprint": "8c073f57d18c1371448649ffda70baf8",
+    "check_id": "seq_scan_read_ratio",
+    "title": "Database reads far more rows than it uses",
+    "category": "indexing",
+    "object": "ep-holy-sun-d28ly9sh/databricks_postgres",
+    "severity": "critical",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T02:04:14.155Z",
+    "occurrences": 3,
+    "measure": 449.8003807656783,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T02:58:28.673Z",
+    "issues": [
+     {
+      "fingerprint": "8c073f57d18c1371448649ffda70baf8",
+      "check_id": "seq_scan_read_ratio",
+      "label": "seq scan read ratio",
+      "severity": "critical",
+      "status": "resolved",
+      "title": "Database reads far more rows than it uses"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-8904207971424412474",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-8904207971424412474",
+    "fingerprint": "1e2a94c7f6d2db0e4b6eeb70be7e7fe4",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-8904207971424412474",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 100,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "1e2a94c7f6d2db0e4b6eeb70be7e7fe4",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "f:25b8e1367aa7583a184682b4e7d4a5f4",
+    "kind": "finding",
+    "endpoint_id": "ep-holy-sun-d28ly9sh",
+    "queryid": null,
+    "fingerprint": "25b8e1367aa7583a184682b4e7d4a5f4",
+    "check_id": "lfc_hit_rate",
+    "title": "Local SSD cache hit rate below 99%",
+    "category": "capacity",
+    "object": "ep-holy-sun-d28ly9sh",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T02:04:14.155Z",
+    "occurrences": 3,
+    "measure": 95.74401774736992,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T02:58:28.673Z",
+    "issues": [
+     {
+      "fingerprint": "25b8e1367aa7583a184682b4e7d4a5f4",
+      "check_id": "lfc_hit_rate",
+      "label": "lfc hit rate",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Local SSD cache hit rate below 99%"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-5154074204082171888",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-5154074204082171888",
+    "fingerprint": "c3ff847b14926b2b6453e489cb70b7d7",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-5154074204082171888",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 63,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "c3ff847b14926b2b6453e489cb70b7d7",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "f:a05b29cbd65b5c9cb21eeda80a1d5c7d",
+    "kind": "finding",
+    "endpoint_id": "ep-holy-sun-d28ly9sh",
+    "queryid": null,
+    "fingerprint": "a05b29cbd65b5c9cb21eeda80a1d5c7d",
+    "check_id": "buffer_hit_rate",
+    "title": "Postgres buffer cache hit rate low",
+    "category": "capacity",
+    "object": "ep-holy-sun-d28ly9sh/databricks_postgres",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T02:04:14.155Z",
+    "occurrences": 3,
+    "measure": 59.70872106417965,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T02:58:28.673Z",
+    "issues": [
+     {
+      "fingerprint": "a05b29cbd65b5c9cb21eeda80a1d5c7d",
+      "check_id": "buffer_hit_rate",
+      "label": "buffer hit rate",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Postgres buffer cache hit rate low"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:4593722656150319685",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "4593722656150319685",
+    "fingerprint": "84d83b848652a6026c76a15a03c449eb",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "4593722656150319685",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 51,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "84d83b848652a6026c76a15a03c449eb",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:4049084114988625396",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "4049084114988625396",
+    "fingerprint": "79270a431b1a061e042e3982a60d5a63",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "4049084114988625396",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 23.2,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "79270a431b1a061e042e3982a60d5a63",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:4839690940437330949",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "4839690940437330949",
+    "fingerprint": "654452c237d35864c3d941132e2f821e",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "4839690940437330949",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 21.666666666666668,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "654452c237d35864c3d941132e2f821e",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:-5148577890527091052",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "-5148577890527091052",
+    "fingerprint": "f1b067b1df89479c2dd276be49c4ccbc",
+    "check_id": "row_misestimate",
+    "title": "Planner row estimates are far off",
+    "category": "performance",
+    "object": "-5148577890527091052",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T00:35:17.079Z",
+    "last_seen": "2026-10-28T03:29:52.704Z",
+    "occurrences": 6,
+    "measure": 21.333333333333332,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T14:12:54.840Z",
+    "issues": [
+     {
+      "fingerprint": "f1b067b1df89479c2dd276be49c4ccbc",
+      "check_id": "row_misestimate",
+      "label": "row estimates",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Planner row estimates are far off"
+     }
+    ]
+   },
+   {
+    "key": "q:ep-sample-primary-a1b2c3d4:5942145956259246582",
+    "kind": "query",
+    "endpoint_id": "ep-sample-primary-a1b2c3d4",
+    "queryid": "5942145956259246582",
+    "fingerprint": "8515d1d6099992a272f456b81a83fd90",
+    "check_id": "query_regression",
+    "title": "Query got slower than its baseline",
+    "category": "performance",
+    "object": "5942145956259246582",
+    "severity": "warning",
+    "status": "resolved",
+    "confidence": "high",
+    "first_seen": "2026-10-28T02:04:14.155Z",
+    "last_seen": "2026-10-28T02:04:14.155Z",
+    "occurrences": 1,
+    "measure": 1.9431556123195275,
+    "db_ms": null,
+    "resolved_at": "2026-10-28T02:58:28.673Z",
+    "issues": [
+     {
+      "fingerprint": "8515d1d6099992a272f456b81a83fd90",
+      "check_id": "query_regression",
+      "label": "regression",
+      "severity": "warning",
+      "status": "resolved",
+      "title": "Query got slower than its baseline"
+     }
+    ]
+   }
+  ]
+ },
+ "computes": [
+  {
+   "endpoint_id": "ep-sample-primary-a1b2c3d4",
+   "endpoint_name": "projects/healthcheck/branches/production/endpoints/primary",
+   "branch_name": "production",
+   "endpoint_type": "ENDPOINT_TYPE_READ_WRITE",
+   "current_state": "ACTIVE",
+   "min_cu": "1.0",
+   "max_cu": "1.0",
+   "suspend_timeout_s": "86400",
+   "ha_min": "1",
+   "restore_window_s": "604800",
+   "is_protected": "false",
+   "enrolled": "true",
+   "captured_at": "2026-10-28T14:12:54.840Z"
+  },
+  {
+   "endpoint_id": "ep-sample-replica-e5f6g7h8",
+   "endpoint_name": "projects/healthcheck/branches/production/endpoints/replica1",
+   "branch_name": "production",
+   "endpoint_type": "ENDPOINT_TYPE_READ_ONLY",
+   "current_state": "ACTIVE",
+   "min_cu": "1.0",
+   "max_cu": "1.0",
+   "suspend_timeout_s": "86400",
+   "ha_min": "1",
+   "restore_window_s": "604800",
+   "is_protected": "false",
+   "enrolled": "true",
+   "captured_at": "2026-10-28T14:12:54.840Z"
+  }
+ ]
+}

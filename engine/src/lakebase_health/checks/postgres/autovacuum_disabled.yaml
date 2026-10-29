@@ -1,0 +1,21 @@
+id: autovacuum_disabled
+title: "Autovacuum disabled on a table"
+category: maintenance
+source: postgres
+thresholds: {warning: 0}
+explain: >
+  The table has autovacuum_enabled = false, so dead tuples accumulate and transaction IDs are never frozen by
+  autovacuum. Re-enable it unless a documented process vacuums this table.
+sql: |
+  SELECT quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS object,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS table_ident,
+         array_to_string(c.reloptions, ',') AS reloptions, 1.0::float8 AS measure
+  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relkind IN ('r', 'm') AND c.reloptions @> ARRAY['autovacuum_enabled=false']
+    AND n.nspname NOT IN {excluded_schemas}
+fix:
+  kind: ddl
+  template: "ALTER TABLE {table_ident} RESET (autovacuum_enabled);"
+  rollback: "ALTER TABLE {table_ident} SET (autovacuum_enabled = false);"
+  risk: safe
+  reversible: true

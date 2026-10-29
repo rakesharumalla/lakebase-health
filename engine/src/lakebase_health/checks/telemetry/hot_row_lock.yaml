@@ -1,0 +1,49 @@
+id: hot_row_lock
+title: "Writes wait on a row lock"
+category: incidents
+source: delta
+query_scoped: true   # platform roles filtered out; see exclusions.yaml
+thresholds: {warning: 3, critical: 10}
+explain: >
+  Longest time (seconds) a sampled statement waited for a row lock (tuple or transactionid) in the last 24 hours,
+  per query. Each wait is joined to the blocking session's sample at the same instant to name the cause in
+  likely_cause: commit_wait means the lock holder was itself waiting for the WAL storage quorum (platform side,
+  see commit_quorum_wait); idle_in_transaction means the application holds a transaction open between statements
+  (set idle_in_transaction_session_timeout, commit sooner); active means real hot-key contention (shorten the
+  transaction, avoid many writers updating the same row, batch per key, or use SKIP LOCKED for queues).
+  not_sampled means the holder was not captured at that instant.
+sql: |
+  WITH waits AS (
+    SELECT w.project_id, w.branch_id, w.endpoint_id, w.queryid, w.pid, w.query_age_ms,
+           CASE WHEN b.pid IS NULL THEN 'not_sampled'
+                WHEN b.wait_event = 'SyncRep' THEN 'commit_wait'
+                WHEN b.backend_state IN (3, 4) THEN 'idle_in_transaction'
+                ELSE 'active' END AS blocker_class
+    FROM system.lakebase.active_session_history w
+    LEFT JOIN system.lakebase.active_session_history b
+      ON b.endpoint_id = w.endpoint_id AND b.ts = w.ts AND b.pid = w.blocking_pid
+     AND b.ts >= current_timestamp() - INTERVAL 24 HOURS
+    WHERE w.ts >= current_timestamp() - INTERVAL 24 HOURS AND w.wait_event_type = 'Lock'
+      AND w.wait_event IN ('tuple', 'transactionid')
+  ), agg AS (
+    SELECT project_id, branch_id, endpoint_id, queryid, max(query_age_ms) / 1000.0 AS measure,
+           count(*) AS samples, count(DISTINCT pid) AS waiting_sessions,
+           sum(CASE WHEN blocker_class = 'commit_wait' THEN 1 ELSE 0 END) AS blocked_by_commit_wait,
+           sum(CASE WHEN blocker_class = 'idle_in_transaction' THEN 1 ELSE 0 END) AS blocked_by_idle_in_transaction,
+           sum(CASE WHEN blocker_class = 'active' THEN 1 ELSE 0 END) AS blocked_by_active,
+           sum(CASE WHEN blocker_class = 'not_sampled' THEN 1 ELSE 0 END) AS blocker_not_sampled
+    FROM waits
+    GROUP BY project_id, branch_id, endpoint_id, queryid
+  )
+  SELECT project_id, branch_id, endpoint_id,
+         endpoint_id || '/' || coalesce(cast(queryid AS STRING), 'unknown') AS object, cast(queryid AS STRING) AS queryid,
+         measure, samples, waiting_sessions, blocked_by_commit_wait, blocked_by_idle_in_transaction,
+         blocked_by_active, blocker_not_sampled,
+         CASE WHEN greatest(blocked_by_commit_wait, blocked_by_idle_in_transaction, blocked_by_active) = 0 THEN 'not_sampled'
+              WHEN blocked_by_commit_wait >= greatest(blocked_by_idle_in_transaction, blocked_by_active) THEN 'commit_wait'
+              WHEN blocked_by_idle_in_transaction >= blocked_by_active THEN 'idle_in_transaction'
+              ELSE 'active' END AS likely_cause
+  FROM agg
+fix:
+  kind: manual
+  risk: safe
