@@ -35,6 +35,12 @@ variables:
   engine_enabled:
     description: Set to "false" to stop all engine work
     default: "true"
+  llm_endpoint:
+    description: Serving endpoint (llm/v1/chat) that drafts query rewrites; the fixer SP needs CAN_QUERY on it
+    default: databricks-claude-opus-5-5
+  llm_enabled:
+    description: Set to "false" to turn LLM query rewrites off (the app hides "Draft a rewrite")
+    default: "true"
 
 artifacts:
   engine:

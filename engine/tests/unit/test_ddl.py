@@ -6,7 +6,7 @@ from tests.fakes import FakeSql
 
 CFG = EngineConfig(catalog="cat")
 TABLES = ("runs", "ingest_watermarks", "inventory", "check_results", "findings", "proposed_actions",
-          "shadow_log", "ledger", "approvals", "action_runs", "metrics_daily")
+          "shadow_log", "ledger", "approvals", "action_runs", "metrics_daily", "drafts", "llm_calls", "llm_status", "query_texts")
 
 
 def test_ensure_schema_creates_everything_idempotently():
@@ -25,7 +25,7 @@ def test_columns_added_later_are_added_to_existing_tables_once():
     ensure_schema(sql, CFG)
     assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.findings ADD COLUMNS \(rollback_note STRING\)$")
     assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ADD COLUMNS \(rollback_note STRING\)$")
-    current = [{"col_name": c} for c in ("fingerprint", "rollback_sql", "rollback_note")]
+    current = [{"col_name": c} for c in ("fingerprint", "rollback_sql", "rollback_note", "origin", "draft_id")]
     sql = FakeSql(responses=[(r"SHOW COLUMNS IN", current)])
     ensure_schema(sql, CFG)
     assert not sql.ran(r"ADD COLUMNS")
@@ -82,3 +82,28 @@ def test_dropping_masks_fails_loudly_on_permission_errors(err):
     sql = FakeSql(responses=[(r"DROP MASK", RuntimeError(err))], existing_tables={"cat.lakebase_health.raw_plan_history"})
     with pytest.raises(RuntimeError, match="PERMISSION_DENIED|INSUFFICIENT_PRIVILEGES"):
         ensure_masks(sql, EngineConfig(catalog="cat", pii_masking=False))
+
+
+def test_rewrite_columns_and_tables_are_added_to_existing_installs():
+    sql = FakeSql(responses=[(r"SHOW COLUMNS IN cat\.lakebase_health\.proposed_actions$", [{"col_name": "rollback_note"}]),
+                             (r"SHOW COLUMNS IN cat\.lakebase_health\.approvals$", [{"col_name": "note"}])])
+    ensure_schema(sql, CFG)
+    assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ADD COLUMNS \(origin STRING\)$")
+    assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ADD COLUMNS \(draft_id STRING\)$")
+    assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.approvals ADD COLUMNS \(fingerprint STRING\)$")
+    [calls] = sql.ran(r"TABLE IF NOT EXISTS cat\.lakebase_health\.llm_calls ")
+    assert "prompt_hash STRING" in calls and "response_hash STRING" in calls
+    assert "prompt STRING" not in calls and "response STRING" not in calls and "content" not in calls
+
+
+def test_rewrite_sql_is_masked_only_on_llm_rows():
+    sql = FakeSql(existing_tables={"cat.lakebase_health.proposed_actions"})
+    ensure_schema(sql, CFG)
+    [fn] = sql.ran(r"FUNCTION IF NOT EXISTS cat\.lakebase_health\.mask_llm_text")
+    assert "coalesce(origin, 'check') <> 'llm'" in fn
+    ensure_masks(sql, CFG)
+    assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ALTER COLUMN sql SET MASK "
+                   r"cat\.lakebase_health\.mask_llm_text USING COLUMNS \(origin\)$")
+    off = FakeSql(existing_tables={"cat.lakebase_health.proposed_actions"})
+    ensure_masks(off, EngineConfig(catalog="cat", pii_masking=False))
+    assert off.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ALTER COLUMN sql DROP MASK$")

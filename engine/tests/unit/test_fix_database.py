@@ -72,7 +72,8 @@ def test_verify_runs_in_the_finding_database_on_the_branch():
     w.action["object"] = "app_staging:public.orders"
     rec, dbs = Recorder([w]), []
     fix.run_fixer(None, fake_w(), CFG, "fixer", deps=_with_real_target(rec, dbs), now=NOW)
-    assert dbs == ["app_staging"] and rec.sessions == ["e"]
+    assert dbs == ["app_staging", "app_staging"]  # the stats read on the source, then the branch
+    assert rec.sessions == ["projects/x/branches/production/endpoints/primary", "e"]
 
 
 def test_unknown_database_blocks_without_executing():

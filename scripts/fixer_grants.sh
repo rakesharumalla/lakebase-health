@@ -31,7 +31,7 @@ q() {
 
 q "GRANT USE CATALOG ON CATALOG $CATALOG TO \`$FIXER_SP\`"
 q "GRANT USE SCHEMA, SELECT ON SCHEMA $CATALOG.lakebase_health TO \`$FIXER_SP\`"
-for t in proposed_actions action_runs ledger shadow_log; do
+for t in proposed_actions action_runs ledger shadow_log drafts llm_calls llm_status; do
   q "GRANT MODIFY ON TABLE $CATALOG.lakebase_health.$t TO \`$FIXER_SP\`"
 done
 q "GRANT MODIFY ON TABLE $CATALOG.lakebase_health.approvals TO \`$APP_SP\`"
@@ -53,4 +53,23 @@ DIR_ID=$(databricks workspace get-status "$ROOT" --profile "$PROFILE" -o json | 
 databricks permissions update directories "$DIR_ID" --profile "$PROFILE" \
   --json "{\"access_control_list\":[{\"service_principal_name\":\"$ENGINE_SP\",\"permission_level\":\"CAN_READ\"},{\"service_principal_name\":\"$FIXER_SP\",\"permission_level\":\"CAN_READ\"}]}" >/dev/null \
   || { echo "FAILED: folder grant on $ROOT" >&2; exit 1; }
+# LLM query rewrites: the fixer SP queries the model endpoint. A Databricks-hosted foundation model endpoint has
+# no permissions object (no id): workspace users can query it unless an admin restricted it.
+LLM_ENDPOINT="${LLM_ENDPOINT:-databricks-claude-opus-5-5}"
+if [[ "${LLM_ENABLED:-true}" == "false" ]]; then
+  echo "LLM_ENABLED=false: no model endpoint grant"
+else
+  EP_ID=$(databricks serving-endpoints get "$LLM_ENDPOINT" --profile "$PROFILE" -o json \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id") or "")') \
+    || { echo "FAILED: serving endpoint $LLM_ENDPOINT not found" >&2; exit 1; }
+  if [[ -n "$EP_ID" ]]; then
+    databricks serving-endpoints update-permissions "$EP_ID" --profile "$PROFILE" \
+      --json "{\"access_control_list\":[{\"service_principal_name\":\"$FIXER_SP\",\"permission_level\":\"CAN_QUERY\"}]}" >/dev/null \
+      || { echo "FAILED: CAN_QUERY on $LLM_ENDPOINT" >&2; exit 1; }
+    echo "fixer SP has CAN_QUERY on $LLM_ENDPOINT"
+  else
+    echo "note: $LLM_ENDPOINT is a Databricks-hosted foundation model endpoint without a permissions object;" \
+      "the fixer SP can query it unless an admin restricted foundation models"
+  fi
+fi
 echo "grants done (target $TARGET, job $JOB, folder $ROOT)"

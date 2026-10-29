@@ -1,7 +1,12 @@
 """Generate runtime signals on the seeded hc_test schema so telemetry-based checks have data.
 
 Usage: python3 scripts/workload.py --profile my-profile \
-         --endpoint projects/healthcheck/branches/production/endpoints/primary --minutes 10
+         --endpoint projects/healthcheck/branches/production/endpoints/primary --minutes 10 [--mode all|rewrite]
+         [--rewrite-file rewrite.sql]
+
+--mode rewrite runs only the planted correlated subquery (PLANTED_QUERY), so it dominates database time and gets a
+top_db_time_query finding for the LLM-rewrite acceptance; with --rewrite-file it runs that SQL instead (the rewrite
+copied from the app, with the same $1/$2), so the post-check can mark the rewrite adopted.
 """
 import argparse
 import hashlib
@@ -13,6 +18,35 @@ import threading
 import time
 
 import psycopg
+
+
+# Planted for LLM query rewrites: the subquery runs once per outer row over the same id range (about 2,000 rows each),
+# so each call costs ~2,000^2 row visits; aggregating once per status is equivalent and far faster. Only the primary
+# key index is used, so the fix loop's index changes on hc_test.orders do not affect it.
+PLANTED_QUERY = (
+    "SELECT o.id, o.status, o.amount FROM hc_test.orders o "
+    "WHERE o.id BETWEEN $1 AND $2 "
+    "AND o.amount > (SELECT avg(o2.amount) FROM hc_test.orders o2 "
+    "WHERE o2.id BETWEEN $1 AND $2 AND o2.status = o.status) "
+    "ORDER BY o.id")
+ORDER_IDS = (1600000001, 1601000000)  # seed_test_workload.sql: setval 1600000000, then 1,000,000 orders
+RANGE = 2000
+
+
+def run_text(c, sql, values):
+    """Sends the text verbatim with $n placeholders and untyped text parameters (as PREPARE infers them), so the
+    statement's query id matches the one the fixer measured on the branch."""
+    res = c.pgconn.exec_params(sql.encode(), [str(v).encode() for v in values])
+    if res.status != psycopg.pq.ExecStatus.TUPLES_OK:
+        raise RuntimeError(res.error_message.decode(errors="replace"))
+
+
+def planted(dsn, stop, sql):
+    with psycopg.connect(dsn, autocommit=True, application_name="hc-rewrite") as c:
+        while not stop.is_set():
+            lo = random.randint(ORDER_IDS[0], ORDER_IDS[1] - RANGE)
+            run_text(c, sql, (lo, lo + RANGE))
+            time.sleep(1)
 
 
 def cli(*args):
@@ -110,11 +144,23 @@ def main():
     ap.add_argument("--profile", required=True)
     ap.add_argument("--endpoint", required=True)
     ap.add_argument("--minutes", type=float, default=10)
+    ap.add_argument("--mode", choices=("all", "rewrite"), default="all")
+    ap.add_argument("--rewrite-file", help="run this SQL (same $1, $2) instead of PLANTED_QUERY in --mode rewrite")
     a = ap.parse_args()
     dsn = conninfo(a.profile, a.endpoint)
     stop = threading.Event()
+    if a.mode == "rewrite":
+        sql = open(a.rewrite_file).read().strip().rstrip(";") if a.rewrite_file else PLANTED_QUERY
+        threads = [threading.Thread(target=planted, args=(dsn, stop, sql)) for _ in range(2)]
+        [t.start() for t in threads]
+        time.sleep(a.minutes * 60)
+        stop.set()
+        [t.join() for t in threads]
+        print("rewrite workload done")
+        return
     workers = [threading.Thread(target=oltp, args=(dsn, stop)) for _ in range(4)]
     workers.append(threading.Thread(target=analytics, args=(dsn, stop)))
+    workers.append(threading.Thread(target=planted, args=(dsn, stop, PLANTED_QUERY)))
     workers += [threading.Thread(target=kv_writer, args=(dsn, stop, i)) for i in range(6)]
     [w.start() for w in workers]
     end = time.time() + a.minutes * 60

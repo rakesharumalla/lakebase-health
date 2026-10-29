@@ -46,3 +46,23 @@ export const queryKey = (endpointId: string, queryid: string) => `${endpointId}:
 /** The (endpoint, queryid) pairs a list of grouped rows needs labels for. */
 export const queryRefs = (rows: GroupRow[]): QueryRef[] =>
   rows.flatMap((r) => (r.kind === "query" && r.endpoint_id && r.queryid ? [{ endpoint_id: r.endpoint_id, queryid: r.queryid }] : []));
+
+export type SeverityCounts = { critical: number; warning: number; info: number };
+
+/**
+ * Open findings per severity in a fully loaded list of grouped rows: each finding row counts once, a query
+ * row counts each of its issues, deduplicated by fingerprint. Returns null when the list is cut (a top-N page
+ * or a LIMIT) or when the tally disagrees with the SQL count, so a header never shows a partial breakdown.
+ */
+export function severityCounts(p: Page<GroupRow>, rows: GroupRow[] = p.rows): SeverityCounts | null {
+  if (rows.length < p.total || p.truncated) return null;
+  const seen = new Map<string, string>();
+  for (const r of rows) {
+    const items = r.kind === "query" && r.issues.length > 0 ? r.issues : [r];
+    for (const i of items) if (!seen.has(i.fingerprint)) seen.set(i.fingerprint, i.severity);
+  }
+  const out: SeverityCounts = { critical: 0, warning: 0, info: 0 };
+  for (const sev of seen.values()) if (sev === "critical" || sev === "warning" || sev === "info") out[sev]++;
+  if (p.count !== undefined && out.critical + out.warning + out.info !== p.count) return null;
+  return out;
+}

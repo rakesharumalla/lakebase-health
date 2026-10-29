@@ -43,6 +43,8 @@ export function registerRoutes(app: express.Application, h: Handlers) {
     send(res, () => h.request(ctxOf(req), param(req.params.id), req.body as unknown), 202),
   );
   app.get("/api/findings/:fp", (req, res) => send(res, () => h.finding(ctxOf(req), param(req.params.fp))));
+  app.get("/api/findings/:fp/drafts", (req, res) => send(res, () => h.drafts(ctxOf(req), param(req.params.fp))));
+  app.post("/api/findings/:fp/drafts", (req, res) => send(res, () => h.requestDraft(ctxOf(req), param(req.params.fp)), 202));
   app.get("/api/findings/:fp/related", (req, res) => send(res, () => h.findingRelated(ctxOf(req), param(req.params.fp))));
   app.get("/api/endpoints/:id/timeline", (req, res) =>
     send(res, () => h.timeline(ctxOf(req), param(req.params.id), req.query.from, req.query.to)),

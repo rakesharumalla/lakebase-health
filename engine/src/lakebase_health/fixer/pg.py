@@ -5,9 +5,15 @@ from ..executors.postgres import SEARCH_PATH_SQL
 from .allowlist import IDENT, parse
 
 LONG = {"create_index", "drop_index"}
+# Catalog and pg_stat_statements reads on the target branch, and the rewrite's verification on its branch (model SQL:
+# the database keeps it read-only, and each statement sets a tighter SET LOCAL statement_timeout of its own).
+READ_ONLY = {"draft_context", "stats", "query_rewrite"}
 
 
 def FIXER_SETUP(kind: str) -> tuple:
+    if kind in READ_ONLY:
+        return (SEARCH_PATH_SQL, "SET default_transaction_read_only = on", "SET lock_timeout = '1s'",
+                "SET statement_timeout = '30s'")
     return (SEARCH_PATH_SQL, "SET lock_timeout = '5s'",
             f"SET statement_timeout = '{'2h' if kind in LONG else '10min'}'")
 

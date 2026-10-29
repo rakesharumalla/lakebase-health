@@ -24,6 +24,7 @@ import { Inbox } from "lucide-react";
 import { Fragment, type ComponentProps, type ReactNode } from "react";
 import { Link, NavLink } from "react-router";
 import { cn } from "../lib/utils";
+import { TILE_CLASSES, type Tone } from "./tone";
 
 /** Presentation primitives shared by the views. Colours come from theme/tokens.css only. */
 
@@ -147,19 +148,27 @@ export function KpiTile({
   value,
   hint,
   accent,
+  tone,
 }: {
   label: string;
   value: ReactNode;
   hint?: ReactNode;
   /** Colour class for the left accent bar, e.g. "bg-sev-critical-fg". */
   accent?: string;
+  /** A severity tile: tinted ground and a number in the severity colour (theme/tokens.css). */
+  tone?: Tone;
 }) {
+  const t = tone ? TILE_CLASSES[tone] : undefined;
   return (
-    <Card className="relative gap-1 overflow-hidden py-4 shadow-none">
+    <Card className={cn("relative gap-1 overflow-hidden py-4 shadow-none", t?.card)}>
       {accent && <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", accent)} />}
-      <div className="px-5 text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="px-5 text-[1.75rem] font-semibold leading-tight tabular-nums tracking-tight text-heading">{value}</div>
-      {hint && <div className="px-5 text-xs text-muted-foreground">{hint}</div>}
+      <div className={cn("px-5 text-xs font-medium uppercase tracking-wide", t ? "text-foreground" : "text-muted-foreground")}>
+        {label}
+      </div>
+      <div className={cn("px-5 text-[1.75rem] font-semibold leading-tight tabular-nums tracking-tight", t?.value ?? "text-heading")}>
+        {value}
+      </div>
+      {hint && <div className={cn("px-5 text-xs", t ? "text-foreground" : "text-muted-foreground")}>{hint}</div>}
     </Card>
   );
 }

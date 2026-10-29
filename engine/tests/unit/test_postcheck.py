@@ -132,3 +132,52 @@ def test_seven_days_without_check_data_confirms_with_low_confidence():
     assert not sql.ran("pg_stat_statements_counters")
     recent = make([{**due, "applied_at": NOW - timedelta(days=6)}])
     assert run_postcheck(recent, EngineConfig(catalog="cat"), NOW, run_id="r2") == []
+
+
+# --- LLM rewrites: adopted | not_adopted ---
+from datetime import timedelta  # noqa: E402
+
+from lakebase_health import ledger  # noqa: E402
+from lakebase_health.fixer.draft.sqltext import text_key  # noqa: E402
+from lakebase_health.fixer.postcheck import run_rewrite_postcheck  # noqa: E402
+
+REWRITE = "SELECT o.id FROM hc_test.orders o WHERE o.id BETWEEN $1 AND $2 AND o.status <> 'void' ORDER BY o.id"
+VERIFIED = {"action_id": "d" * 32, "verified_at": NOW - timedelta(hours=2), "endpoint_id": "ep-a",
+            "rewrite_queryid": "-77", "rewrite_key": text_key(REWRITE)}
+
+
+def rewrite_sql(due, seen, upd=UPD_OK):
+    return FakeSql(responses=[(r"a\.origin = 'llm'", due), upd, (r"pg_stat_statements_counters", seen)])
+
+
+def test_a_rewrite_seen_by_query_id_is_adopted():
+    sql = rewrite_sql([VERIFIED], [{"queryid": "-77", "query": "<REDACTED>", "calls": 25},
+                                   {"queryid": "42", "query": "SELECT old", "calls": 900}])
+    [res] = run_rewrite_postcheck(sql, EngineConfig(catalog="cat"), NOW)
+    assert res["outcome"] == "adopted" and res["calls"] == 25
+    assert sql.ran(r"UPDATE cat\.lakebase_health\.drafts SET state = :s")
+    assert [a["s"] for s, a in sql.statements if "drafts SET state" in s] == ["adopted"]
+    [ev] = sql.tables[T + "ledger"]
+    assert ev["event_type"] == "adopted" and ev["action_id"] == "d" * 32 and ledger.verify([ev])
+    assert sql.tables[T + "action_runs"][0]["kind"] == "postcheck"
+
+
+def test_a_rewrite_seen_by_its_normalized_text_is_adopted():
+    sent = "select o.id from hc_test.orders o where o.id between $1 and $2 and o.status <> $3 order by o.id"
+    sql = rewrite_sql([{**VERIFIED, "rewrite_queryid": None}], [{"queryid": "5", "query": sent, "calls": 30}])
+    assert run_rewrite_postcheck(sql, EngineConfig(catalog="cat"), NOW)[0]["outcome"] == "adopted"
+
+
+def test_too_few_calls_wait_and_a_week_without_is_not_adopted():
+    few = rewrite_sql([VERIFIED], [{"queryid": "-77", "query": None, "calls": 5}])
+    assert run_rewrite_postcheck(few, EngineConfig(catalog="cat"), NOW) == [] and not few.ran(r"^UPDATE")
+    old = rewrite_sql([{**VERIFIED, "verified_at": NOW - timedelta(days=7, hours=1)}], [])
+    [res] = run_rewrite_postcheck(old, EngineConfig(catalog="cat"), NOW)
+    assert res["outcome"] == "not_adopted" and res["calls"] == 0
+
+
+def test_a_lost_state_race_writes_nothing_else():
+    sql = rewrite_sql([VERIFIED], [{"queryid": "-77", "query": None, "calls": 25}],
+                      upd=(r"^\s*UPDATE \S*proposed_actions", [{"num_affected_rows": 0}]))
+    assert run_rewrite_postcheck(sql, EngineConfig(catalog="cat"), NOW) == []
+    assert not sql.ran(r"drafts SET state") and T + "ledger" not in sql.tables

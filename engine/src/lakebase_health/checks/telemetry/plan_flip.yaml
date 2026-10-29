@@ -6,7 +6,8 @@ query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 2, critical: 10}
 explain: >
   Ratio between the slowest and fastest median latency of a query's plan shapes on the same endpoint (7 days,
-  >= 5 executions per shape). Fix statistics first; pin the good plan with pg_hint_plan only as a last resort.
+  >= 5 executions per shape). Fix statistics first; if the bad plan persists, draft a query rewrite on this
+  finding (pg_hint_plan hints cannot be loaded on Lakebase without a support request).
 sql: |
   WITH p AS (
     SELECT project_id, branch_id, endpoint_id, queryid, plan_fingerprint, max(query_text) AS query_text,
@@ -16,4 +17,4 @@ sql: |
   SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
          count(*) AS plan_shapes, max(p50_ms) / NULLIF(min(p50_ms), 0) AS measure
   FROM p GROUP BY project_id, branch_id, endpoint_id, queryid HAVING count(*) > 1
-fix: {kind: manual, template: "ANALYZE the tables of query {object}; if the bad plan persists, pin the good one with a pg_hint_plan hint.", risk: moderate}
+fix: {kind: manual, template: "ANALYZE the tables of query {object}; if the bad plan persists, use Draft a rewrite on this finding.", risk: moderate}

@@ -2,7 +2,8 @@ import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@databri
 import { CircleCheck } from "lucide-react";
 import { useParams } from "react-router";
 import { ApiMessage } from "../ApiMessage";
-import { SeverityBadge, StatusBadge } from "../components/Severity";
+import { SectionCounts, SeverityBadge, StatusBadge } from "../components/Severity";
+import { ROW_CLASSES, severityTone } from "../components/tone";
 import {
   DataTable,
   EmptyState,
@@ -20,12 +21,13 @@ import {
   TextLink,
 } from "../components/ui";
 import { GroupTitle } from "../components/QueryText";
-import { queryRefs, type GroupRow, type Page, type QueryLabel } from "../lib/findings";
+import { queryRefs, severityCounts, type GroupRow, type Page, type QueryLabel } from "../lib/findings";
 import { fmtTime, str, truthy, type Row } from "../lib/format";
 import { useQueryLabels } from "../lib/useQueryLabels";
 import { pageRows, useShowAll } from "../lib/useShowAll";
 import { projectNav } from "../lib/nav";
 import { useApi } from "../lib/useApi";
+import { cn } from "../lib/utils";
 
 type Section = Page<GroupRow> & { category: string };
 export type ProjectData = {
@@ -55,7 +57,14 @@ export function FindingRows({ rows, labels }: { rows: GroupRow[]; labels: Map<st
       </TableHeader>
       <TableBody>
         {rows.map((f) => (
-          <TableRow key={f.key} className={f.kind === "query" ? "align-top" : undefined}>
+          <TableRow
+            key={f.key}
+            data-severity={f.status === "resolved" ? "resolved" : f.severity}
+            className={cn(
+              f.kind === "query" && "align-top",
+              ROW_CLASSES[f.status === "resolved" ? "ok" : severityTone(f.severity)],
+            )}
+          >
             <TableCell>
               <SeverityBadge severity={f.severity} />
             </TableCell>
@@ -123,17 +132,17 @@ export function ProjectView({ data }: { data: ProjectData }) {
       </PageHeader>
 
       <KpiRow>
-        <KpiTile label="Critical open" value={data.counts.critical} accent="bg-sev-critical-fg" />
-        <KpiTile label="Warning open" value={data.counts.warning} accent="bg-sev-warning-fg" />
-        <KpiTile label="Info open" value={data.counts.info} accent="bg-sev-info-fg" />
-        <KpiTile label="Resolved, last 7 days" value={data.counts.resolved} accent="bg-sev-ok-fg" />
+        <KpiTile label="Critical open" value={data.counts.critical} accent="bg-sev-critical-edge" tone={data.counts.critical ? "critical" : undefined} />
+        <KpiTile label="Warning open" value={data.counts.warning} accent="bg-sev-warning-edge" tone={data.counts.warning ? "warning" : undefined} />
+        <KpiTile label="Info open" value={data.counts.info} accent="bg-sev-info-edge" tone={data.counts.info ? "info" : undefined} />
+        <KpiTile label="Resolved, last 7 days" value={data.counts.resolved} accent="bg-sev-ok-edge" />
       </KpiRow>
 
       {shown.map((s) => (
         <SectionCard
           key={s.category}
           title={<span className="capitalize">{s.category}</span>}
-          description={`${s.count ?? s.total} open`}
+          description={<SectionCounts open={s.count ?? s.total} counts={severityCounts(s, s.rows)} />}
           contentClassName="px-0"
         >
           <FindingRows rows={s.rows} labels={labels} />

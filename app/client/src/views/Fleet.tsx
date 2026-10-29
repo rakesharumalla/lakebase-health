@@ -10,6 +10,7 @@ import {
 import { RefreshCw, ShieldQuestion } from "lucide-react";
 import { ApiMessage } from "../ApiMessage";
 import { CountBadge, StatusBadge } from "../components/Severity";
+import { EDGE_CLASSES, type Tone } from "../components/tone";
 import { DataTable, EmptyState, KpiRow, KpiTile, LoadingState, MonoId, NUM, PageHeader, TextLink } from "../components/ui";
 import { fmtTime, str, truthy, type Meta, type Row } from "../lib/format";
 import { useApi } from "../lib/useApi";
@@ -20,6 +21,9 @@ async function refreshAccess() {
   await fetch("/api/access/refresh", { method: "POST" });
   window.location.reload();
 }
+
+/** A project row's edge: its worst open severity, critical or warning only. */
+const worst = (p: Row): Tone => (Number(p.critical) > 0 ? "critical" : Number(p.warning) > 0 ? "warning" : "neutral");
 
 const sum = (rows: Row[], key: string) => rows.reduce((n, r) => n + Number(r[key] ?? 0), 0);
 
@@ -58,7 +62,8 @@ export function FleetView({ fleet, meta }: { fleet: Fleet; meta: Meta }) {
         <KpiTile
           label="Projects with critical findings"
           value={`${withCritical} of ${projects.length}`}
-          accent={withCritical ? "bg-sev-critical-fg" : "bg-sev-ok-fg"}
+          accent={withCritical ? "bg-sev-critical-edge" : "bg-sev-ok-edge"}
+          tone={withCritical ? "critical" : undefined}
         />
         <KpiTile label="Computes active" value={`${sum(projects, "active_computes")} of ${computes}`} />
         <KpiTile label="Postgres checks on" value={`${enrolled} of ${projects.length}`} hint="projects enrolled" />
@@ -78,7 +83,7 @@ export function FleetView({ fleet, meta }: { fleet: Fleet; meta: Meta }) {
           </TableHeader>
           <TableBody>
             {projects.map((p) => (
-              <TableRow key={str(p.project_id)}>
+              <TableRow key={str(p.project_id)} data-severity={worst(p)} className={EDGE_CLASSES[worst(p)]}>
                 <TableCell>
                   <div className="flex flex-col">
                     <TextLink to={`/projects/${p.project_id}`}>{str(p.project_name ?? p.project_id)}</TextLink>

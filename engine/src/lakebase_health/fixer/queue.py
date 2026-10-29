@@ -47,6 +47,8 @@ def pending(sql, cfg) -> list:
 
 def staleness(w: Work, now) -> str | None:
     a, ap = w.action, w.approval
+    if a.get("kind") == "query_rewrite":
+        return "advisory"  # a rewrite is changed in application code; the fixer never runs its SQL
     target = a.get("rollback_sql") if ap["request"] == "rollback" else a.get("sql")
     if ap["request"] == "rollback" and not runnable(target):
         return "no_rollback"  # nothing to undo, or a stored rollback outside the allowlist: never executed

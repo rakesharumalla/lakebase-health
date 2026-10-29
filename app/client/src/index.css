@@ -42,4 +42,19 @@
   --color-sev-neutral-fg: var(--lbh-sev-neutral-fg);
   --color-sev-neutral-bg: var(--lbh-sev-neutral-bg);
   --color-sev-neutral-border: var(--lbh-sev-neutral-border);
+  --color-sev-critical-solid-bg: var(--lbh-sev-critical-solid-bg);
+  --color-sev-critical-solid-fg: var(--lbh-sev-critical-solid-fg);
+  --color-sev-warning-solid-bg: var(--lbh-sev-warning-solid-bg);
+  --color-sev-warning-solid-fg: var(--lbh-sev-warning-solid-fg);
+  --color-sev-info-outline: var(--lbh-sev-info-outline);
+  --color-sev-ok-solid-bg: var(--lbh-sev-ok-solid-bg);
+  --color-sev-ok-solid-fg: var(--lbh-sev-ok-solid-fg);
+  --color-sev-critical-edge: var(--lbh-sev-critical-edge);
+  --color-sev-warning-edge: var(--lbh-sev-warning-edge);
+  --color-sev-info-edge: var(--lbh-sev-info-edge);
+  --color-sev-ok-edge: var(--lbh-sev-ok-edge);
+  --color-sev-critical-row: var(--lbh-sev-critical-row);
+  --color-sev-critical-row-hover: var(--lbh-sev-critical-row-hover);
+  --color-sev-warning-row: var(--lbh-sev-warning-row);
+  --color-sev-warning-row-hover: var(--lbh-sev-warning-row-hover);
 }

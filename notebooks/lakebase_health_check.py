@@ -977,9 +977,9 @@ run_delta(SQL, "disk_spill", measure="measure", thresholds={'warning': 0.0, 'cri
 # MAGIC
 # MAGIC **Category:** performance | **Severity:** critical if `measure` > 10; warning if `measure` > 2 | **Schedule:** every run
 # MAGIC
-# MAGIC Ratio between the slowest and fastest median latency of a query's plan shapes on the same endpoint (7 days, >= 5 executions per shape). Fix statistics first; pin the good plan with pg_hint_plan only as a last resort.
+# MAGIC Ratio between the slowest and fastest median latency of a query's plan shapes on the same endpoint (7 days, >= 5 executions per shape). Fix statistics first; if the bad plan persists, draft a query rewrite on this finding (pg_hint_plan hints cannot be loaded on Lakebase without a support request).
 # MAGIC
-# MAGIC - **Candidate fix** (manual, risk moderate): `ANALYZE the tables of query {object}; if the bad plan persists, pin the good one with a pg_hint_plan hint.`
+# MAGIC - **Candidate fix** (manual, risk moderate): `ANALYZE the tables of query {object}; if the bad plan persists, use Draft a rewrite on this finding.`
 # MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
 # MAGIC - **Query scoped:** telemetry from platform, engine and fixer roles is filtered out (the subqueries the engine adds, visible in the SQL below)
 

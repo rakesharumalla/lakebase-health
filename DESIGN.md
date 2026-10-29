@@ -9,7 +9,7 @@ Goal: give every Lakebase customer a health check that (1) runs deterministic ch
 | Lakebase is fully managed and serverless. There is no host to install an agent on. | A literal "sidecar running next to Postgres" is not possible. Anything "standalone" runs elsewhere and connects over the network. |
 | `system.lakebase.*` keeps **7 days**, is account‑wide, and needs account admin + metastore admin (or grants). Statement text and plans are masked unless the reader is in `databricks_pii_access`. | Read telemetry with an identity that has those grants. Persist rollups to Delta for trends beyond 7d. Design for masked text (key on `queryid`). |
 | `pg_stat_*` and `pg_stat_statements` **reset on suspend/restart** (scale‑to‑zero). | Postgres‑side checks need a stats‑window guard and confidence labels. Prefer system tables for anything time‑based. |
-| **HypoPG, pg_repack, pg_cron, auto_explain are not available.** pg_hint_plan, pgstattuple, pgrowlocks and pg_prewarm are. | Validate index and rewrite suggestions on a **copy‑on‑write branch**, not hypothetically. Bloat fixes are limited to REINDEX CONCURRENTLY, VACUUM FULL, or swap. |
+| **HypoPG, pg_repack, pg_cron, auto_explain are not available.** pgstattuple, pgrowlocks and pg_prewarm are. pg_hint_plan is installable but its library is not loaded, and `LOAD`, `session_preload_libraries` and `pg_hint_plan.enable_hint_table` are refused for non-superusers (tested 2026-10-29), so hints have no effect without a support request. | Validate index and rewrite suggestions on a **copy‑on‑write branch**, not hypothetically. Bloat fixes are limited to REINDEX CONCURRENTLY, VACUUM FULL, or swap. |
 | **Branches are instant, copy‑on‑write, and have a TTL.** A project allows 10 unarchived branches and 3 root branches. | This is the differentiator: test every proposed fix on real data at no risk to prod, then promote. |
 | Built‑in **Insights** (LLM agent, Beta) and **Genie** already diagnose issues from the same telemetry. | Don't rebuild them. Add what they lack: **deterministic, thresholded, auditable checks**, a **fleet view across projects**, **long‑term trends and forecasts**, and **branch‑verified fixes**. Link to "Fix with Genie" where it fits. |
 | The Postgres API / SDK (`w.postgres`) exposes restore window, protection, HA group, CU range, roles' auth method and pg_settings. | Backup, security and config checks come from the API. No SQL is needed for them. |
@@ -127,7 +127,7 @@ The loop that turns findings into safe changes:
 - Write penalty: extra time on DML replay against the affected table, and added size.
 - Data quality of the evidence: stats window, sample count, and whether parameters were available (`plan_history.parameters` needs PII access; without it, use representative values and lower confidence).
 
-**What it covers:** missing and FK indexes, dropping unused or duplicate indexes (verify no plan regresses), `work_mem` per role for spills, extended statistics, pg_hint_plan pins, query rewrites, and per‑table autovacuum settings (verified over the 24h window rather than on a branch).
+**What it covers:** missing and FK indexes, dropping unused or duplicate indexes (verify no plan regresses), `work_mem` per role for spills, extended statistics, query rewrites (drafted by an LLM, advisory), and per‑table autovacuum settings (verified over the 24h window rather than on a branch).
 
 **Guardrails:**
 - Nothing auto‑applies to prod. Every action carries a stored rollback.
@@ -157,20 +157,20 @@ A container or VM outside Databricks that polls Lakebase and pushes metrics to P
 | Audience | **Self-serve product** | Option A becomes an internal test harness only. Ship B + C + D. |
 | Access | **SP can read `system.lakebase` and join `databricks_pii_access`** | Full query text, plans and parameters. Fix verification can replay real parameters. |
 | Write actions | **May create branches and apply DDL, with approval** | Option D is in scope. Prod apply stays behind an explicit per-change approval. |
-| LLM scope | **May draft query rewrites and pg_hint_plan hints** | Rewrites and hints go through the same branch verification as DDL: same results, faster, plan changed as intended. |
+| LLM scope | **May draft query rewrites** (on demand, advisory) | Rewrites go through branch verification: same results, faster, plan change reported. pg_hint_plan hints are out until Lakebase lets the library load (see §1). |
 
 Build order:
 1. **Ingestion job + check runner + findings tables (Option B core, §2a).** Calibrate thresholds on the `healthcheck` test project and 1–2 design-partner projects.
 2. **Dashboard + alerts** on `findings` and `metrics_daily`, plus forecasts (storage, XID, sequences, connections).
 3. **App (Option C):** fleet view, project drill-down, finding detail with evidence.
-4. **Fix loop (Option D):** a "Test on branch" button runs `verify_on_branch` logic, then an approval, an apply with stored rollback, and a 24h post-apply check. LLM-drafted rewrites and hints enter here as candidates.
+4. **Fix loop (Option D):** a "Test on branch" button runs `verify_on_branch` logic, then an approval, an apply with stored rollback, and a 24h post-apply check. LLM-drafted rewrites are verified the same way but stay advisory (the customer changes application code).
 
 Prototype status: `scripts/verify_on_branch.py` already runs the loop for one index. Tested on the FK finding: 72.9 ms → 0.05 ms, plan changed from Seq Scan to Index Only Scan, branch created in about 8 s, production untouched. Its write-penalty measure was noisy (one cold sample gave −33%), so it needs repeated, warmed probes before the confidence score can be trusted.
 
 ## 6. Remaining open decisions
 
 1. **Positioning with Insights/Genie:** complement them (deterministic checks, fleet view, verified fixes) or wrap them (surface Insights findings in the same console)?
-2. **Model:** which serving endpoint drafts rewrites and hints? Default proposal: Claude on Databricks Foundation Model APIs. Findings are sent as JSON; parameters are included only when the customer opts in.
+2. **Model:** decided: `databricks-claude-opus-5-5` through the serving endpoint in `var.llm_endpoint`. The model gets the normalized query, plan, DDL and statistics summaries, never parameter values or literals.
 3. **Packaging:** DABs bundle in a public repo (e.g. databricks-solutions), a Marketplace app, or internal field tooling?
 4. **Where the derived tables live:** a catalog the customer chooses at install, or a fixed `lakebase_health` schema?
 
@@ -250,7 +250,7 @@ All three ran against the same `healthcheck` project (PG 17, 1 CU), with 15 plan
 | Deterministic, tunable thresholds | No (fixed agent instructions) | Yes | Yes |
 | Validating a fix | No | HypoPG what‑if (**unavailable on Lakebase**, so marked "unverified"), then post‑apply verify and rollback | Real execution on a copy‑on‑write branch before prod |
 | Executing fixes | Via Genie, after confirmation | Mature trust‑ramped executor: shadow mode, approvals, rollback | Planned (approval → apply → 24 h verify) |
-| LLM | Yes (built in) | Optional (any OpenAI‑compatible endpoint) | Planned (rewrites and hints, verified on a branch) |
+| LLM | Yes (built in) | Optional (any OpenAI‑compatible endpoint) | Query rewrites on demand, verified on a branch, advisory |
 | Fleet / history | Per project, 7 days | Fleet mode; history in `sage` schema or a meta DB | All projects; unlimited history in Delta |
 | Effect on Lakebase cost | None | 60 s polling likely stops scale‑to‑zero (not measured) | Ingestion reads system tables, not the database; Postgres catalog checks run on a schedule |
 | Auth on Lakebase | Managed | Static password (OAuth tokens expire after 1 h; no refresh found) | OAuth token per run |

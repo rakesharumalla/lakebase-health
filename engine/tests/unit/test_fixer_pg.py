@@ -17,6 +17,12 @@ class Conn:
         self.closed = True
 
 
+def test_the_rewrite_verification_session_is_read_only():
+    """Final review I-4: model SQL ran in a writable session with a 10 min statement timeout."""
+    setup = FIXER_SETUP("query_rewrite")
+    assert "SET default_transaction_read_only = on" in setup and "SET statement_timeout = '30s'" in setup
+
+
 def test_guards_per_kind_and_writable_session():
     assert "SET statement_timeout = '2h'" in FIXER_SETUP("create_index")
     assert "SET statement_timeout = '10min'" in FIXER_SETUP("analyze")
@@ -90,3 +96,9 @@ def test_produced_sql_still_passes_allowlist(src, table):
     sql, _ = with_index_name(src, table, ACTION)
     stmt = parse(sql)
     assert stmt.kind == "create_index" and stmt.table == table
+
+
+def test_the_stats_read_on_the_source_branch_is_read_only_and_short():
+    from lakebase_health.fixer.pg import FIXER_SETUP
+    setup = FIXER_SETUP("stats")
+    assert "SET default_transaction_read_only = on" in setup and "SET statement_timeout = '30s'" in setup

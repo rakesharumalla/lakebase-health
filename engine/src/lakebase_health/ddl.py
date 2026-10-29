@@ -20,22 +20,35 @@ TABLE_DDL = {
     "proposed_actions": "action_id STRING, fingerprint STRING, check_id STRING, kind STRING, sql STRING, "
                         "rollback_sql STRING, risk STRING, reversible BOOLEAN, verify_on_branch BOOLEAN, "
                         "state STRING, created_at TIMESTAMP, updated_at TIMESTAMP, expires_at TIMESTAMP, "
-                        "rollback_note STRING",
+                        "rollback_note STRING, origin STRING, draft_id STRING",
     "shadow_log": "action_id STRING, evaluated_at TIMESTAMP, run_id STRING, would_allow_level STRING, "
                   "would_execute BOOLEAN, reason STRING, outcome_score DOUBLE",
     "ledger": "event_id STRING, action_id STRING, event_type STRING, actor STRING, payload STRING, ts TIMESTAMP, "
               "prev_hash STRING, hash STRING",
     "approvals": "approval_id STRING, action_id STRING, request STRING, sql_hash STRING, approver STRING, "
-                 "requested_at TIMESTAMP, note STRING",
+                 "requested_at TIMESTAMP, note STRING, fingerprint STRING",
     "action_runs": "run_id STRING, approval_id STRING, action_id STRING, kind STRING, started_at TIMESTAMP, "
                    "ended_at TIMESTAMP, outcome STRING, report STRING, branch STRING, error STRING",
     "metrics_daily": "day DATE, project_id STRING, endpoint_id STRING, metric STRING, value DOUBLE",
+    # LLM query rewrites: one row per attempt, one per model call (hashes and token counts only), endpoint set-up
+    "drafts": "draft_id STRING, finding_fingerprint STRING, attempt INT, action_id STRING, approval_id STRING, "
+              "endpoint STRING, prompt_version STRING, context_hash STRING, rationale STRING, "
+              "expected_plan_change STRING, state STRING, reason STRING, requested_by STRING, "
+              "requested_at TIMESTAMP, updated_at TIMESTAMP, ended_at TIMESTAMP",
+    "llm_calls": "call_id STRING, draft_id STRING, endpoint STRING, prompt_hash STRING, response_hash STRING, "
+                 "input_tokens BIGINT, output_tokens BIGINT, latency_ms DOUBLE, status STRING, request_id STRING, "
+                 "called_at TIMESTAMP",
+    "llm_status": "endpoint STRING, enabled BOOLEAN, ready BOOLEAN, reason STRING, checked_at TIMESTAMP",
+    # Normalized pg_stat_statements text of enrolled branches, for the app (system.lakebase masks it at the source)
+    "query_texts": "project_id STRING, branch_id STRING, endpoint_id STRING, dbid BIGINT, datname STRING, "
+                   "queryid BIGINT, query STRING, captured_at TIMESTAMP",
 }
 
 # Columns added after the first release: CREATE TABLE IF NOT EXISTS leaves existing tables as they are
 ADDED_COLUMNS = {
     "findings": ("rollback_note STRING",),
-    "proposed_actions": ("rollback_note STRING",),
+    "proposed_actions": ("rollback_note STRING", "origin STRING", "draft_id STRING"),
+    "approvals": ("fingerprint STRING",),
 }
 
 MASKED_COLUMNS = {
@@ -45,7 +58,10 @@ MASKED_COLUMNS = {
     "raw_ddl_history": ("query_text", "ddl_json"),
     "findings": ("query_text",),
     "check_results": ("query_text",),
+    "query_texts": ("query",),
 }
+# Masked only on rows whose origin is 'llm': a rewrite carries the original query's literals; check fixes are DDL.
+ORIGIN_MASKED_COLUMNS = {"proposed_actions": ("sql",)}
 
 
 def ensure_schema(sql, cfg) -> None:
@@ -62,6 +78,10 @@ def ensure_schema(sql, cfg) -> None:
     sql.execute(
         f"CREATE FUNCTION IF NOT EXISTS {cfg.table('mask_text')}(v STRING) RETURNS STRING "
         "RETURN CASE WHEN is_account_group_member('databricks_pii_access') THEN v ELSE '<REDACTED>' END")
+    sql.execute(
+        f"CREATE FUNCTION IF NOT EXISTS {cfg.table('mask_llm_text')}(v STRING, origin STRING) RETURNS STRING "
+        "RETURN CASE WHEN coalesce(origin, 'check') <> 'llm' OR is_account_group_member('databricks_pii_access') "
+        "THEN v ELSE '<REDACTED>' END")
 
 
 def set_masks(sql, cfg, table: str) -> None:
@@ -72,18 +92,19 @@ def set_masks(sql, cfg, table: str) -> None:
 
 
 def ensure_masks(sql, cfg) -> None:
-    """Sets the mask_text column masks, or with cfg.pii_masking off removes them (idempotent either way)."""
-    fn = cfg.table("mask_text")
-    for table, cols in MASKED_COLUMNS.items():
+    """Sets the column masks, or with cfg.pii_masking off removes them (idempotent either way)."""
+    masks = [(t, c, cfg.table("mask_text")) for t, cols in MASKED_COLUMNS.items() for c in cols]
+    masks += [(t, c, f"{cfg.table('mask_llm_text')} USING COLUMNS (origin)")
+              for t, cols in ORIGIN_MASKED_COLUMNS.items() for c in cols]
+    for table, col, fn in masks:
         full = cfg.table(table)
         if not sql.table_exists(full):
             continue
-        for col in cols:
-            if cfg.pii_masking:
-                sql.execute(f"ALTER TABLE {full} ALTER COLUMN {col} SET MASK {fn}")
-                continue
-            try:
-                sql.execute(f"ALTER TABLE {full} ALTER COLUMN {col} DROP MASK")
-            except Exception as e:  # tolerated only when the column has no mask (already dropped or never set)
-                if any(m in str(e).upper() for m in ("PERMISSION", "PRIVILEGE", "NOT AUTHORIZED")):
-                    raise  # masks would silently stay while the app shows text to everyone
+        if cfg.pii_masking:
+            sql.execute(f"ALTER TABLE {full} ALTER COLUMN {col} SET MASK {fn}")
+            continue
+        try:
+            sql.execute(f"ALTER TABLE {full} ALTER COLUMN {col} DROP MASK")
+        except Exception as e:  # tolerated only when the column has no mask (already dropped or never set)
+            if any(m in str(e).upper() for m in ("PERMISSION", "PRIVILEGE", "NOT AUTHORIZED")):
+                raise  # masks would silently stay while the app shows text to everyone

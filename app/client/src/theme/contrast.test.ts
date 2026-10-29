@@ -76,6 +76,53 @@ const pairs: Pair[] = [
   { label: "OK / resolved badge", fg: "--lbh-sev-ok-fg", bg: "--lbh-sev-ok-bg", min: AA },
   { label: "Neutral badge", fg: "--lbh-sev-neutral-fg", bg: "--lbh-sev-neutral-bg", min: AA },
   { label: "Critical text on card (inline errors)", fg: "--lbh-sev-critical-fg", bg: "--lbh-card", min: AA },
+
+  // Bold severity: badges, issue badges and section count chips
+  { label: "Critical solid badge", fg: "--lbh-sev-critical-solid-fg", bg: "--lbh-sev-critical-solid-bg", min: AA },
+  { label: "Warning solid badge", fg: "--lbh-sev-warning-solid-fg", bg: "--lbh-sev-warning-solid-bg", min: AA },
+  { label: "Info outline badge text (on its tint)", fg: "--lbh-sev-info-fg", bg: "--lbh-sev-info-bg", min: AA },
+  { label: "OK / resolved solid badge", fg: "--lbh-sev-ok-solid-fg", bg: "--lbh-sev-ok-solid-bg", min: AA },
+  { label: "Info outline border vs card", fg: "--lbh-sev-info-outline", bg: "--lbh-card", min: UI },
+  { label: "Info outline border vs its tint", fg: "--lbh-sev-info-outline", bg: "--lbh-sev-info-bg", min: UI },
+  { label: "Info outline border vs critical row", fg: "--lbh-sev-info-outline", bg: "--lbh-sev-critical-row", min: UI },
+  { label: "Info outline border vs warning row", fg: "--lbh-sev-info-outline", bg: "--lbh-sev-warning-row", min: UI },
+
+  // Bold severity: text on tinted rows (critical, warning) and their hover
+  { label: "Body text on critical row", fg: "--lbh-text", bg: "--lbh-sev-critical-row", min: AA },
+  { label: "Body text on critical row, hover", fg: "--lbh-text", bg: "--lbh-sev-critical-row-hover", min: AA },
+  { label: "Body text on warning row", fg: "--lbh-text", bg: "--lbh-sev-warning-row", min: AA },
+  { label: "Body text on warning row, hover", fg: "--lbh-text", bg: "--lbh-sev-warning-row-hover", min: AA },
+  { label: "Muted text on critical row", fg: "--lbh-text-muted", bg: "--lbh-sev-critical-row", min: AA },
+  { label: "Muted text on critical row, hover", fg: "--lbh-text-muted", bg: "--lbh-sev-critical-row-hover", min: AA },
+  { label: "Muted text on warning row", fg: "--lbh-text-muted", bg: "--lbh-sev-warning-row", min: AA },
+  { label: "Muted text on warning row, hover", fg: "--lbh-text-muted", bg: "--lbh-sev-warning-row-hover", min: AA },
+  { label: "Link on critical row, hover", fg: "--lbh-link", bg: "--lbh-sev-critical-row-hover", min: AA },
+  { label: "Link on warning row, hover", fg: "--lbh-link", bg: "--lbh-sev-warning-row-hover", min: AA },
+
+  // Bold severity: 4 px row edges (non-text) against the row, its hover and the plain card
+  { label: "Critical edge vs critical row", fg: "--lbh-sev-critical-edge", bg: "--lbh-sev-critical-row", min: UI },
+  { label: "Critical edge vs critical row, hover", fg: "--lbh-sev-critical-edge", bg: "--lbh-sev-critical-row-hover", min: UI },
+  { label: "Critical edge vs card (fleet row)", fg: "--lbh-sev-critical-edge", bg: "--lbh-card", min: UI },
+  { label: "Critical edge vs card hover (fleet row)", fg: "--lbh-sev-critical-edge", bg: "--lbh-subtle", min: UI, alpha: 0.5 },
+  { label: "Warning edge vs warning row", fg: "--lbh-sev-warning-edge", bg: "--lbh-sev-warning-row", min: UI },
+  { label: "Warning edge vs warning row, hover", fg: "--lbh-sev-warning-edge", bg: "--lbh-sev-warning-row-hover", min: UI },
+  { label: "Warning edge vs card (fleet row)", fg: "--lbh-sev-warning-edge", bg: "--lbh-card", min: UI },
+  { label: "Warning edge vs card hover (fleet row)", fg: "--lbh-sev-warning-edge", bg: "--lbh-subtle", min: UI, alpha: 0.5 },
+  { label: "Info edge vs card", fg: "--lbh-sev-info-edge", bg: "--lbh-card", min: UI },
+  { label: "Info edge vs card hover", fg: "--lbh-sev-info-edge", bg: "--lbh-subtle", min: UI, alpha: 0.5 },
+  { label: "Resolved edge vs card", fg: "--lbh-sev-ok-edge", bg: "--lbh-card", min: UI },
+  { label: "Resolved edge vs card hover", fg: "--lbh-sev-ok-edge", bg: "--lbh-subtle", min: UI, alpha: 0.5 },
+
+  // Bold severity: KPI tiles (tinted ground; the number is the badge pair above, the label is body text)
+  { label: "Critical tile number", fg: "--lbh-sev-critical-fg", bg: "--lbh-sev-critical-bg", min: AA },
+  { label: "Critical tile label", fg: "--lbh-text", bg: "--lbh-sev-critical-bg", min: AA },
+  { label: "Warning tile number", fg: "--lbh-sev-warning-fg", bg: "--lbh-sev-warning-bg", min: AA },
+  { label: "Warning tile label", fg: "--lbh-text", bg: "--lbh-sev-warning-bg", min: AA },
+  { label: "Info tile number", fg: "--lbh-sev-info-fg", bg: "--lbh-sev-info-bg", min: AA },
+  { label: "Info tile label", fg: "--lbh-text", bg: "--lbh-sev-info-bg", min: AA },
+  { label: "Severity tile accent bar vs its tint (critical)", fg: "--lbh-sev-critical-edge", bg: "--lbh-sev-critical-bg", min: UI },
+  { label: "Severity tile accent bar vs its tint (warning)", fg: "--lbh-sev-warning-edge", bg: "--lbh-sev-warning-bg", min: UI },
+  { label: "Severity tile accent bar vs its tint (info)", fg: "--lbh-sev-info-edge", bg: "--lbh-sev-info-bg", min: UI },
 ];
 
 function measure(tokens: Record<string, string>, p: Pair) {
@@ -95,6 +142,13 @@ describe("theme contrast (WCAG 2.x)", () => {
       expect(measure(tokens, p).ratio).toBeGreaterThanOrEqual(p.min);
     });
   }
+
+  it("the prefers-color-scheme dark fallback matches the .dark block", () => {
+    const media = /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\.light\)\s*\{([^}]*)\}/.exec(css);
+    expect(media).toBeTruthy();
+    const decls = (body: string) => Object.fromEntries([...body.matchAll(/(--lbh-[\w-]+)\s*:\s*([^;]+);/g)].map((d) => [d[1], d[2].trim()]));
+    expect(decls(media![1])).toEqual(block(/\n\.dark/));
+  });
 
   it("prints the table when PRINT_CONTRAST is set", () => {
     if (!process.env.PRINT_CONTRAST) return;

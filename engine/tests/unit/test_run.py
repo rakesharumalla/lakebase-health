@@ -195,3 +195,35 @@ def test_a_fix_regressed_finding_never_resolves_from_other_regressions():
         persist_regressions(sql, cfg, f"run{i}", NOW + timedelta(minutes=15 * i), [reg])
     status = {f["object"]: f["status"] for f in sql.tables["cat.lakebase_health.findings"]}
     assert status == {"a": "new", "b": "new", "c": "new"}
+def test_rewrite_postcheck_runs_in_every_engine_run_and_its_failure_is_not_fatal(tmp_path, monkeypatch):
+    write_check(tmp_path)
+    monkeypatch.setattr("lakebase_health.jobs.run.run_rewrite_postcheck",
+                        lambda sql, cfg, now, errors=None: [{"outcome": "adopted"}, {"outcome": "not_adopted"}])
+    sql = FakeSql(responses=[(r"SELECT max\(ts\) AS max_ts", [{"max_ts": NOW, "n": 1}])])
+    run = run_engine(sql, fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW, checks_dir=tmp_path)
+    assert '"rewrites_adopted": 1' in run["counts"]
+
+    def boom(sql, cfg, now, errors=None):
+        raise RuntimeError("no drafts table")
+    monkeypatch.setattr("lakebase_health.jobs.run.run_rewrite_postcheck", boom)
+    run = run_engine(FakeSql(responses=[(r"SELECT max\(ts\) AS max_ts", [{"max_ts": NOW, "n": 1}])]), fake_w(),
+                     EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW, checks_dir=tmp_path)
+    assert run["status"] == "ok_with_errors" and "rewrite postcheck: RuntimeError" in run["errors"]
+
+
+def test_every_run_stores_query_texts_and_their_failure_is_not_fatal(tmp_path, monkeypatch):
+    import json
+    from lakebase_health import querytexts
+    write_check(tmp_path)
+    got = []
+    monkeypatch.setattr(querytexts, "collect", lambda pg, inv, now: got.append(inv) or (
+        [{"endpoint_id": "ep-a", "queryid": 1, "query": "SELECT $1"}], ["ep-a"], ["query_texts ep-b: RuntimeError"]))
+    sql = FakeSql()
+    run = run_engine(sql, fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW,
+                     checks_dir=tmp_path, skip_ingest=True)
+    assert got == [[]] and sql.tables["cat.lakebase_health.query_texts"][0]["queryid"] == 1
+    assert json.loads(run["counts"])["query_texts"] == 1 and "query_texts ep-b: RuntimeError" in run["errors"]
+    monkeypatch.setattr(querytexts, "collect", lambda *a: (_ for _ in ()).throw(RuntimeError("boom")))
+    run = run_engine(FakeSql(), fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW,
+                     checks_dir=tmp_path, skip_ingest=True)
+    assert run["status"] == "ok_with_errors" and "query_texts: RuntimeError: boom" in run["errors"]

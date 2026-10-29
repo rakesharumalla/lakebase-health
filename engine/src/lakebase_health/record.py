@@ -125,7 +125,9 @@ def persist(sql, cfg, run_id, now, outcomes, specs, inventory, branches=None) ->
     changed = changed + [f for fp, f in existing.items() if fp in gone and all(c is not f for c in changed)]
     sql.merge_rows(cfg.table("findings"), [f.to_row() for f in changed], ["fingerprint"])
 
-    all_actions = {r["action_id"]: Action.from_row(r) for r in sql.query(f"SELECT * FROM {cfg.table('proposed_actions')}")}
+    # LLM rewrites belong to the fixer (states, adoption); the engine plans only check actions
+    all_actions = {r["action_id"]: Action.from_row(r) for r in sql.query(f"SELECT * FROM {cfg.table('proposed_actions')}")
+                   if (r.get("origin") or "check") == "check"}
     actions, events = plan_actions(changed, all_actions, all_specs, now, gone)
     merge_actions(sql, cfg, actions)
     active = [a for a in actions if a.state == "proposed"]

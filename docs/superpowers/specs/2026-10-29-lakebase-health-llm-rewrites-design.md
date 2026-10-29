@@ -87,15 +87,25 @@ hash chain.
 
 **Static (before any branch):** parses as one SELECT or WITH; reads only tables the original reads; same set of `$n`
 parameters; no literals beyond the original skeleton's; same number of output columns; no functions outside a safe
-list; no data-modifying CTEs, `pg_sleep`, `SET` or comments with hints. Failure → `draft_failed` with the reason.
+list; no data-modifying CTEs, `pg_sleep`, `SET` or comments with hints; no CTE named after a table of the original
+or of the catalog context (`cte_shadows_table`), and inside a non-recursive CTE's own body (or an earlier CTE) its
+name counts as the real table. Failure → `draft_failed` with the reason. Parse and tokenizer errors are recorded by
+error type only (their messages quote the SQL, literal values included).
 
 **Branch verification** (`lbh-verify-<8>`, TTL 4 h, deleted afterwards):
 
 | Rule | Passes when |
 |---|---|
-| Equivalence | For each of up to 3 sampled parameter sets, run both in a read-only transaction: same row count and same checksum (order-sensitive when the original has ORDER BY, else order-insensitive) |
-| Speed | Median of 3 warm runs per set; rewrite ≥ 1.2× faster on the median across sets; no set > 10 % and > 1 ms slower |
+| Equivalence | For each of up to 3 sampled parameter sets, run both in a read-only transaction: same row count and same checksum (order-sensitive when the original has ORDER BY, else order-insensitive); **at least one set where the original returns rows**, else `verify_failed: no_informative_samples` |
+| Speed | Median of 3 warm runs per set, in a read-only transaction; rewrite ≥ 1.2× faster on the median across sets; no set > 10 % and > 1 ms slower |
 | Plan | Plan node changes reported; `expected_plan_change` found in the new plan (mismatch is a warning, not a failure) |
+
+**Limits.** The verification session is read-only at the database (`default_transaction_read_only = on`). Per set,
+the original is timed first under a 60 s statement timeout; the rewrite's checksum and timing then run under
+`clamp(10 × the original's median, 5 s, 60 s)`. The whole verification has a 15 min budget. A statement timeout or
+the budget ends the attempt as `verify_failed: timeout` (so a very slow original cannot be verified). Parameters on
+the same table are drawn together from one row; a column's alias is resolved in its own SELECT, then the enclosing
+ones.
 
 ## 6. Error handling
 
@@ -107,7 +117,10 @@ list; no data-modifying CTEs, `pg_sleep`, `SET` or comments with hints. Failure 
 | Static check fails | `draft_failed: <check>` |
 | No sampled parameters or redacted text | `draft_failed: no_samples` |
 | Branch unavailable / missing privileges | Existing handling (`verify_failed: branch_unavailable`, `blocked`) |
-| Drafting not set up (endpoint missing, no `CAN_QUERY`, `llm_enabled` false) | Button hidden; card says "LLM drafting not set up" |
+| Drafting not set up (endpoint missing, no `CAN_QUERY`, `llm_enabled` false) | Button hidden; card says "LLM drafting not set up" (from the latest `llm_status` probe). The fixer probes on every sweep while the status is missing or not ready, hourly while ready, and whenever a draft is pending |
+| Original returns no rows for every set | `verify_failed: no_informative_samples` |
+| Statement timeout or 15 min budget | `verify_failed: timeout` |
+| Unexpected error while drafting | `draft_failed: error: <type>` (type only, never the message) |
 
 ## 7. App, access, setup
 
@@ -144,3 +157,23 @@ Branch `feature/llm-rewrites` from `feature/fix-loop` after its final review and
 - Hints, if Lakebase allows loading `pg_hint_plan` (would use the existing apply/rollback path with `hint_plan.hints`).
 - Explanations and report summaries with the same gateway and logging.
 - `DESIGN.md` and `HEALTH_CHECKS.md` say pg_hint_plan is available; correct them with the finding above.
+
+## 10. Addendum (2026-10-29): query text and parameters without `databricks_pii_access`
+
+Found in live acceptance: `system.lakebase` masks `query_text`, `plan_json` and `parameters` at the source for
+principals outside the account group `databricks_pii_access`; the engine and fixer SPs are not members, so every
+row copied since the jobs run as the SPs is `<REDACTED>`. User decision: do **not** require the PII group.
+
+| Need | Source (default) |
+|---|---|
+| Query text for a draft | `pg_stat_statements.query` for the finding's `queryid` on the target branch, read by the fixer at draft time (normalized text with `$n`; the engine/fixer roles have `pg_read_all_stats` via `pg_monitor`) |
+| Matching finding → query | `queryid` only |
+| Plan for the model | `EXPLAIN (FORMAT JSON, GENERIC_PLAN)` of the normalized query on the verification branch (PG 16+), literals stripped as before |
+| Parameter values for equivalence and speed | Sampled from the data on the **verification branch**: for each `$n` bound to a column (`col = $n`, `col IN ($n…)`, ranges, `LIMIT $n` → small integer), draw up to 3 existing values (`TABLESAMPLE`/`ORDER BY random() LIMIT`, read-only); values stay in the job, are never sent to the model or stored |
+| Unmappable `$n` | `draft_failed: no_samples` with the reason "parameter $k is not bound to a column" |
+| Fixer affected-query samples (index verify, fix loop) | The same: text from `pg_stat_statements` on the source branch, parameters sampled from data on the verification branch |
+| Query text in the app | The analysis job stores normalized `pg_stat_statements.query` per (branch, queryid) for enrolled branches in `query_texts`, under the existing `pii_masking` switch; never literal values |
+
+When `system.lakebase` text is readable (`<REDACTED>` absent), it may be used as a fallback for non-enrolled
+branches; plan-history parameters remain unused. Acceptance criterion 1 finds the planted query by `queryid` from
+`pg_stat_statements` on healthcheck instead of a text match.

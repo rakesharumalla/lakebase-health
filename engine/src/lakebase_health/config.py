@@ -24,6 +24,9 @@ class EngineConfig:
     pii_masking: bool = True  # False: drop the mask_text column masks so every reader sees query text
     service_roles: tuple = ()  # engine/fixer service principal roles whose queries the query checks ignore
     ingest_interval_minutes: int = 60  # the ingest schedule; analysis-only runs call a source stale after 2x this
+    llm_endpoint: str = "databricks-claude-opus-5-5"  # serving endpoint that drafts query rewrites
+    llm_enabled: bool = True  # False: the fixer drafts nothing and the app hides "Draft a rewrite"
+    llm_test_response: str = ""  # acceptance only (--llm-test-response): a fixed bad reply instead of the model
 
     def table(self, name: str) -> str:
         return f"{self.catalog}.{self.schema}.{name}"

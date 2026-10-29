@@ -14,7 +14,8 @@ resources:
           python_wheel_task:
             package_name: lakebase_health
             entry_point: fix
-            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}", "--pii-masking", "${var.pii_masking}"]
+            parameters: ["--catalog", "${var.catalog}", "--schema", "${var.schema}", "--pii-masking", "${var.pii_masking}",
+                         "--llm-endpoint", "${var.llm_endpoint}", "--llm-enabled", "${var.llm_enabled}"]
       environments:
         - environment_key: engine
           spec:
@@ -24,3 +25,4 @@ resources:
               - psycopg[binary]>=3.1
               - databricks-sdk>=0.81.0
               - pyyaml>=6
+              - sqlglot>=30.24,<31

@@ -55,6 +55,10 @@ ALTER TABLE orders SET (autovacuum_enabled = false);
 UPDATE orders SET status = 'refunded' WHERE id % 3 = 0;
 DELETE FROM orders WHERE id % 10 = 0;
 
+-- LLM query rewrites: scripts/workload.py PLANTED_QUERY is a correlated subquery on orders (average amount per
+-- status over an id range, recomputed for every outer row). It needs only the orders primary key, so nothing is
+-- planted here; run `workload.py --mode rewrite` to make it the top query.
+
 -- PUBLIC CREATE on a schema (check 29)
 GRANT CREATE ON SCHEMA hc_test TO PUBLIC;
 

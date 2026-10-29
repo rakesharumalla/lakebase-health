@@ -14,15 +14,18 @@ def _walk(node):
         yield from _walk(ch)
 
 
-def measure(conn, q, params, repeats=3) -> dict:
-    """Median warm execution of one sampled statement; writes are rolled back."""
+def measure(conn, q, params, repeats=3, read_only=False, timeout_ms=None) -> dict:
+    """Median warm execution of one sampled statement; writes are rolled back. `read_only` and `timeout_ms` are for
+    model SQL (a rewrite): a READ ONLY transaction and a SET LOCAL statement_timeout."""
     from psycopg import sql as pgsql
     times, nodes, indexes = [], set(), set()
     error = None
     for values in params:
         args = ", ".join(pgsql.Literal(v).as_string(conn) for v in values)
-        conn.execute("BEGIN")
+        conn.execute("BEGIN READ ONLY" if read_only else "BEGIN")
         try:
+            if timeout_ms is not None:
+                conn.execute(f"SET LOCAL statement_timeout = '{int(timeout_ms)}ms'")
             conn.execute(f"PREPARE lbh_q AS {q}")
             execute = f"EXECUTE lbh_q({args})" if values else "EXECUTE lbh_q"
             conn.execute(execute if q.lower().startswith(("select", "with")) else f"EXPLAIN ANALYZE {execute}")  # warm-up

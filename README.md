@@ -99,7 +99,7 @@ approved.
 | Identity | Runs | Can | Cannot |
 |---|---|---|---|
 | Engine SP (`engine_sp`) | Engine and analysis jobs | Read `system.lakebase`. Create and own `<catalog>.lakebase_health` (tables, the `mask_text` function, column masks). List the Lakebase projects it has `CAN_USE` on. Connect to enrolled branches as a role with only `pg_monitor`, in sessions with `default_transaction_read_only`, `statement_timeout = 30s` and `lock_timeout = 1s`. | Write to any Postgres database (it has no table, schema or database privileges). Wake a suspended compute. Create branches. Approve or apply fixes. |
-| Fixer SP (`fixer_sp`) | Fixer job | `SELECT` on `<catalog>.lakebase_health`; `MODIFY` on `proposed_actions`, `action_runs`, `ledger` and `shadow_log` only. Create and delete `lbh-verify-*` branches on projects where it has `CAN_MANAGE`. Run approved statements as a member of the role that owns the target tables. | Run anything outside its allowlist: `CREATE INDEX CONCURRENTLY` (non-unique), `DROP INDEX CONCURRENTLY`, `ANALYZE <table>`, `ALTER TABLE <table> SET\|RESET (autovacuum_*)`, one statement on one object, no comments or literals. Act without an approval row whose SQL hash matches. Write `findings` or `approvals`. Touch a project where it has no Postgres role. |
+| Fixer SP (`fixer_sp`) | Fixer job | `SELECT` on `<catalog>.lakebase_health`; `MODIFY` on `proposed_actions`, `action_runs`, `ledger`, `shadow_log`, `drafts`, `llm_calls` and `llm_status` only. `CAN_QUERY` on the rewrite model endpoint. Create and delete `lbh-verify-*` branches on projects where it has `CAN_MANAGE`. Run approved statements as a member of the role that owns the target tables. | Run anything outside its allowlist: `CREATE INDEX CONCURRENTLY` (non-unique), `DROP INDEX CONCURRENTLY`, `ANALYZE <table>`, `ALTER TABLE <table> SET\|RESET (autovacuum_*)`, one statement on one object, no comments or literals. Act without an approval row whose SQL hash matches. Write `findings` or `approvals`. Touch a project where it has no Postgres role. |
 | App SP (created by Databricks Apps) | The app | `SELECT` on `<catalog>.lakebase_health`. `MODIFY` on `approvals` (Unity Catalog has no insert-only privilege; every consumed approval is recorded in the hash-chained ledger). `CAN_MANAGE_RUN` on the fixer job. `CAN_USE` on the SQL warehouse. | Connect to Postgres, hold Lakebase project permissions, or write any other table. Per-user checks (project visibility, approver rights, group membership) use the signed-in user's token and GET calls only. |
 
 `CAN_MANAGE` on a project is broader than what the fixer uses (the code only creates and deletes `lbh-verify-*`
@@ -112,13 +112,14 @@ Least-privilege grants, all applied in [Setup](#setup):
 | Engine SP | `USE SCHEMA` and `SELECT` on schema `system.lakebase` | Account admin who is also metastore admin |
 | Engine SP | `USE CATALOG`, `CREATE SCHEMA` on `<catalog>` | Catalog owner |
 | Engine SP | `CAN_USE` on each Lakebase project to inventory | Project owner |
-| Engine SP | Postgres role with `pg_monitor`, per branch (optional) | Project owner |
+| Engine SP | Postgres role with `pg_monitor`, and `USAGE` on the schema `pg_stat_statements` is installed in (for `query_texts`), per branch (optional) | Project owner |
 | Engine and fixer SPs | `CAN_READ` on the bundle's workspace folder (to install the wheel) | Deployer (`scripts/fixer_grants.sh`) |
-| Fixer SP | `USE CATALOG`; `USE SCHEMA` and `SELECT` on the schema; `MODIFY` on 4 tables | Catalog owner (`scripts/fixer_grants.sh`) |
-| Fixer SP | `CAN_MANAGE` on the project, and a Postgres role that is a member of the table-owner role, per project (optional) | Project owner |
+| Fixer SP | `USE CATALOG`; `USE SCHEMA` and `SELECT` on the schema; `MODIFY` on 7 tables | Catalog owner (`scripts/fixer_grants.sh`) |
+| Fixer SP | `CAN_QUERY` on `llm_endpoint` (when the endpoint has a permissions object) | Endpoint manager (`scripts/fixer_grants.sh`) |
+| Fixer SP | `CAN_MANAGE` on the project, and a Postgres role that is a member of the table-owner role and of `pg_monitor` (for other roles' statements in `pg_stat_statements`), per project (optional) | Project owner |
 | App SP | `USE CATALOG`; `USE SCHEMA` and `SELECT` on the schema | Catalog owner |
 | App SP | `MODIFY` on `approvals`; `CAN_MANAGE_RUN` on the fixer job | Catalog owner (`scripts/fixer_grants.sh`) |
-| Engine, fixer and app SPs | Member of the account group `databricks_pii_access` (only when PII masking is on) | Account admin |
+| App SP | Member of the account group `databricks_pii_access` (only when PII masking is on, so the app can show query text) | Account admin |
 
 ## Prerequisites
 
@@ -175,8 +176,10 @@ databricks permissions update database-projects <project-id> \
   --json '{"access_control_list":[{"service_principal_name":"<engine-sp-application-id>","permission_level":"CAN_USE"}]}'
 ```
 
-If you keep PII masking on (the default on the `prod` target), do step 8 now, before the first engine run. Rows
-the engine copies while it is outside `databricks_pii_access` keep `<REDACTED>` text for good.
+If you keep PII masking on (the default on the `prod` target), read step 8 before the first engine run. The engine
+and fixer SPs do not need `databricks_pii_access`: the app's query text, drafting and fix verification read
+`pg_stat_statements` on enrolled branches. Only the `raw_*` copies of `system.lakebase` keep `<REDACTED>` text
+for rows copied while the engine SP is outside the group.
 
 ### 2. Choose bundle variables and a target
 
@@ -194,6 +197,8 @@ Variables (from `databricks.yml`):
 | `analysis_schedule` | `0 0/15 * * * ?` | Quartz cron for the analysis-only job |
 | `pii_masking` | `"true"` | `"true"` masks query text, plans and parameters for anyone outside `databricks_pii_access`. Only the exact string `"false"` turns masking off. See [PII masking](#pii-masking). |
 | `engine_enabled` | `"true"` | `"false"` makes every engine and analysis run stop at once with status `disabled` |
+| `llm_endpoint` | `databricks-claude-opus-5-5` | Serving endpoint (`llm/v1/chat`) that drafts query rewrites |
+| `llm_enabled` | `"true"` | `"false"` turns query rewrites off; the app hides **Draft a rewrite** |
 
 Targets:
 
@@ -251,7 +256,8 @@ DATABRICKS_BUNDLE_TARGET=prod PROFILE=<profile> CATALOG=<catalog> WAREHOUSE=<war
 ```
 
 The script grants the fixer `USE CATALOG`, `USE SCHEMA` and `SELECT`, plus `MODIFY` on `proposed_actions`,
-`action_runs`, `ledger` and `shadow_log`; the app SP `MODIFY` on `approvals` and `CAN_MANAGE_RUN` on the fixer
+`action_runs`, `ledger`, `shadow_log`, `drafts`, `llm_calls` and `llm_status`, and `CAN_QUERY` on `LLM_ENDPOINT`
+(default `databricks-claude-opus-5-5`; skipped with `LLM_ENABLED=false`); the app SP `MODIFY` on `approvals` and `CAN_MANAGE_RUN` on the fixer
 job; and both job SPs `CAN_READ` on the bundle folder. It works on the target in `DATABRICKS_BUNDLE_TARGET`
 (default `dev`): the fixer job is the ID `databricks bundle summary` reports for that target, and the folder is the
 target's root path from `databricks bundle validate`. Re-run it if the bundle root path changes.
@@ -356,10 +362,13 @@ account group `databricks_pii_access`, and the engine applies the same rule to i
 
 | Member | Why |
 |---|---|
-| Engine SP | To copy real query text from `system.lakebase`; otherwise the copies hold `<REDACTED>` |
-| Fixer SP | Branch verification finds the affected queries by their text; otherwise verification fails with "no sampled queries on this table could be measured" |
 | App SP | The app reads the tables as its SP; otherwise it gets `<REDACTED>` and no user sees query text in the app |
 | People who query the tables directly | To see text in SQL |
+| Engine SP (optional) | Only for real text in the `raw_*` copies of `system.lakebase`. Not needed for the app's query text: each engine and analysis run copies normalized `pg_stat_statements.query` of enrolled branches into `query_texts` |
+
+The fixer SP does not need the group. Drafting and fix verification read statement text from `pg_stat_statements`
+on the enrolled branch (its role has `pg_read_all_stats` through `pg_monitor`) and draw parameter values from the
+data on the verification branch; `system.lakebase` text and bind parameters are not used.
 
 In the app, with masking on, full query text goes to members of `databricks_pii_access`, the project owner and
 workspace admins. Everyone else sees a normalized skeleton (literals and bind values replaced) or the query ID.
@@ -452,6 +461,47 @@ rollback SQL on the card, adding `CONCURRENTLY`.
 Who can approve: the project owner, or a user with `CAN_MANAGE` on the Lakebase project. The app checks this with
 the user's own token on every click and records the approver's user name.
 
+### Query rewrites (LLM)
+
+Query findings (`top_db_time_query`, `query_regression`, `plan_flip`, `storage_wait`, `disk_spill`,
+`sort_limit_waste`, and the top query of `row_misestimate`) have a **Query rewrite (advisory)** card. The project
+owner or a manager clicks **Draft a rewrite**; the fixer job then:
+
+1. Reads the query's normalized text from `pg_stat_statements` on the finding's compute, by query ID and
+   database, in a read-only session (`draft_failed: no_query_text` when there is no entry; readable
+   `system.lakebase` text is the fallback). In the same session it plans the text with
+   `EXPLAIN (FORMAT JSON, GENERIC_PLAN)` (nothing is executed), checks that every `$n` is compared with a column
+   (`=`, `IN`, `BETWEEN`, `<`/`>`, `LIKE`) or is a `LIMIT`/`OFFSET` (otherwise `draft_failed: no_samples`, before
+   the model call), and reads the tables' columns, constraints, indexes, row estimates and `pg_stats` summaries
+   (`n_distinct`, `null_frac`, `correlation`). It does not need `databricks_pii_access`.
+2. Sends the model (`var.llm_endpoint`, default `databricks-claude-opus-5-5`) the query with every literal replaced
+   by a numbered parameter, and the plan and definitions with literals replaced by `?`. **No parameter values or
+   literals leave the database.** `llm_calls` keeps only hashes, token counts, latency and the request id.
+3. Checks the reply: one `SELECT`/`WITH`, only the original's tables, the same `$n` parameters, no new literals but
+   `0` and `1`, the same number of output columns, safe functions only, no data-modifying CTE, `SET`, locking
+   clause or comment. A failure ends the attempt `draft_failed` with the check's name.
+4. Verifies on `lbh-verify-<id>` (TTL 4 hours, deleted afterwards). It draws up to 3 parameter sets from existing
+   rows there (read-only, 10 s statement timeout; a `BETWEEN` range spans about the query's mean rows per call,
+   `LIMIT`/`OFFSET` get small integers). The values are never stored or sent to the model. For each set: the same row count and
+   checksum (in order when the query has `ORDER BY`), the median of 3 warm runs at least 1.2x faster, no set more
+   than 10% and 1 ms slower, and the plan node changes compared with what the model expected (a mismatch is only a
+   warning).
+
+The card shows the rationale, the rewritten SQL with a copy button and a diff, the per-set results and timings, the
+plan change, and every attempt. **Retry** asks for a new attempt once the last one has finished. Nothing is
+applied: change the query in your application code. Once the endpoint has run the rewritten query 20 times, the
+next engine run marks it **adopted**; after 7 days without, **not adopted**. The rewrite SQL follows the PII
+masking rule for query text.
+
+Setup: the grants script gives the fixer SP `MODIFY` on `drafts`, `llm_calls` and `llm_status`, and `CAN_QUERY`
+on the endpoint when it has a permissions object (Databricks-hosted foundation model endpoints have none and are
+queryable by workspace users unless an admin restricted them). With `--var llm_enabled=false` the feature is off.
+Until the fixer has checked the endpoint (it does so when a draft is requested, so the first click may be refused
+with "not set up") or while the endpoint is missing, not ready or not permitted, the card says **LLM drafting not
+set up** with the reason, which is stored in `llm_status`. After upgrading, run the engine job once before using
+the app: it adds the `drafts`, `llm_calls`, `llm_status` and `query_texts` tables and the `approvals.fingerprint`,
+`proposed_actions.origin` and `draft_id` columns the app writes and reads.
+
 ## Operations
 
 ### Schedules
@@ -515,12 +565,15 @@ Query text, plans and bind parameters in the `raw_*` tables, `findings` and `che
 (`<REDACTED>`) for anyone outside `databricks_pii_access`, and the app shows text as described in step 8.
 `--var pii_masking=false` turns this off: the engine drops the column masks on its next run (engine or analysis
 job; both apply the setting), and every app user sees query text. Rows copied while masking was on keep the
-literal `<REDACTED>`; the fixer cannot sample them, and its verification report says so.
+literal `<REDACTED>`. The app reads `query_texts` (normalized `pg_stat_statements` text of enrolled branches, under
+the same mask) first, so text copied as `<REDACTED>` only matters for branches that are not enrolled. The fixer
+never uses `system.lakebase` text or parameters.
 
 The `dev` target sets `pii_masking` to `"false"`: the maintainers chose to show query text to everyone on their
 test workspace for now. To turn masking back on:
 
-1. Add the engine SP, the fixer SP, the app SP and every user who should see text to `databricks_pii_access`.
+1. Add the app SP and every user who should see text to `databricks_pii_access` (the engine and fixer SPs do not
+   need it).
 2. Remove `pii_masking: "false"` from the target in `databricks.yml` (or deploy with `--var pii_masking=true`),
    redeploy, and run the engine job once to restore the masks.
 
@@ -536,15 +589,20 @@ test workspace for now. To turn masking back on:
 | Verification fails with `branch_unavailable` and PermissionDenied | The fixer SP has `CAN_USE` instead of `CAN_MANAGE` on the project (step 7), or the project is at its branch limit. |
 | A fix is `blocked` with `42501` (permission denied for schema or table) | The owner role lacks `USAGE` on the schema, or the fixer is not a member of the owner role (step 7). Fix the grant, then use **Retry after enrolment**. |
 | `GRANT <owner_role>` fails: "Only roles with the ADMIN option ..." | The tables belong to a person's login role. Move ownership to a `NOLOGIN` role (step 7). |
-| Verification fails: "no sampled queries on this table could be measured" | With masking on, the fixer SP is not in `databricks_pii_access`, so it sees `<REDACTED>` text. Or the table had no sampled queries in the last 24 hours. |
+| Verification fails: "no sampled queries on this table could be measured" | The report's `samples` line says why: no statement in `pg_stat_statements` of the finding's database touches the table (statistics reset, or `pg_stat_statements` not installed there), or their parameters could not be mapped to columns ("parameter $k is not bound to a column"). |
 | `pii_masking=false` is deployed, but text is still `<REDACTED>` and `runs.errors` shows `PERMISSION_DENIED ... MANAGE` | The tables were created by a person. Grant `MANAGE` (step 5) and run the engine or analysis job. |
-| Query text is `<REDACTED>` for everyone, with masking on | The engine SP was outside `databricks_pii_access` when the rows were copied (they stay redacted), or the app SP is not a member. |
+| Query text is `<REDACTED>` for everyone, with masking on | The app SP is not in `databricks_pii_access`, or the branch is not enrolled (no `query_texts` rows; the `system.lakebase` copies stay redacted for rows copied while the engine SP was outside the group). |
 | Postgres checks show **off** | No Postgres role for the engine SP on that branch (step 6). |
 | Postgres checks are on, but results are `skipped:compute_inactive` | The compute was suspended at run time. The engine never wakes it; results appear on a run while it is active. |
 | Checks report `ok_stale_source` | Ingest for that source failed or is behind. Look at `runs.errors` and `ingest_watermarks`; the next engine run retries from the watermark. |
 | No telemetry for a project | Lakebase observability in system tables is off for the workspace, or the endpoint is not exporting. On the endpoint, `SHOW neon_monitor.log_capture_enabled;` and `SHOW databricks.o11y_exporter_enabled;` must both be `on`; if not, restart the endpoint. |
 | A user sees no projects | They do not own a project or hold a Postgres role on one. Grant a role, then use **Refresh access**. |
 | An approve button returns 403 | Only the project owner or `CAN_MANAGE` holders can approve. |
+| The rewrite card says "LLM drafting not set up" | `llm_status.reason` says why: `llm_enabled` is `"false"`, the endpoint is missing or not READY, or the fixer SP lacks `CAN_QUERY`. Fix it, then click again (the fixer re-checks on each request). |
+| A draft ends `draft_failed: no_query_text` and says the role lacks `pg_read_all_stats` | The fixer's Postgres role is not in `pg_monitor`, so `pg_stat_statements` hides the application's statements from it. As the project owner: `GRANT pg_monitor TO "<fixer-sp-application-id>";` |
+| The engine run's errors show `query_texts <endpoint>: UndefinedTable` | `pg_stat_statements` is installed in a schema the engine role cannot use. Grant `USAGE` on that schema to the engine role, or install the extension in `public`. |
+| A draft ends `draft_failed: no_query_text` | `pg_stat_statements` on the finding's compute has no entry for the query ID (statistics reset or evicted, or the extension is not installed) and the `system.lakebase` text is `<REDACTED>`. Run the workload again and retry. |
+| A draft ends `draft_failed: no_samples` | A `$n` parameter is not compared with a column (for example `$1 + 1`, a function argument or a select-list value), so no values can be drawn. `verify_failed: no_samples` means the table on the branch had no rows with values. |
 
 ### Uninstall
 

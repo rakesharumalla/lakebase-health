@@ -1,8 +1,9 @@
 import { AccessError, canSeeText, type Access } from "./access";
 import { NEEDS_ACTIONABLE, blockRetry, hasRollback, isRequestKind, legalRequests, notActionable, sqlHash } from "./approvals";
+import { draftToken, findingQueryId, requestState, setUpOf, type DraftView } from "./drafts";
 import { groupFindings, isOpen, page, type GroupRow } from "./group";
 import { maskRows } from "./mask";
-import { parseQueryPairs, queryLabel } from "./querytext";
+import { parseQueryPairs, queryLabel, skeleton } from "./querytext";
 import type { Row } from "./sql";
 import { parseActionId, parseEndpointId, parseFingerprint, parseProjectId, parseWindow } from "./validate";
 
@@ -12,6 +13,8 @@ type Deps = {
   runner: { run(name: string, ids: string[], params?: Record<string, string | Date>): Promise<Row[]> };
   scheduleMinutes: number;
   approvals?: Approvals;
+  /** LLM query rewrites: LLM_ENABLED and LLM_ENDPOINT. Absent means not set up. */
+  llm?: { enabled: boolean; endpoint: string };
 };
 
 /** Approval writes and checks; absent means the fix loop is not installed and every action is read-only. */
@@ -114,7 +117,10 @@ function relatedCut(related: Row[]) {
   return { ...cut(count, related.length, related.length >= RELATED_LIMIT), limit: RELATED_LIMIT };
 }
 
-export function createHandlers({ access, runner, scheduleMinutes, approvals }: Deps) {
+const REWRITE = "query_rewrite";
+const ADVISORY = "a query rewrite is advisory: change it in your application code";
+
+export function createHandlers({ access, runner, scheduleMinutes, approvals, llm }: Deps) {
   async function who(ctx: Ctx): Promise<Access> {
     try {
       return await access.resolve(ctx.token, ctx.user);
@@ -146,6 +152,50 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals }: D
     const [action] = await runner.run("action", a.projectIds, { action_id: id });
     if (!action) throw new HttpError(404, "not found");
     return { a, id, action };
+  }
+
+  /** Shown text of a rewrite: the full SQL for callers who may read query text, else its skeleton. */
+  const rewriteText = (sql: unknown, full: boolean) =>
+    typeof sql === "string" ? (full ? sql : skeleton(sql)) : null;
+
+  async function draftView(ctx: Ctx, a: Access, finding: Row): Promise<DraftView> {
+    const fp = String(finding.fingerprint);
+    const project = String(finding.project_id);
+    const queryid = findingQueryId(finding.check_id, finding.evidence, finding.object);
+    const endpoint = sv(finding.endpoint_id);
+    const full = canSeeText(a, project);
+    const [attempts, requests, status, text, manager] = await Promise.all([
+      runner.run("finding_drafts", a.projectIds, { fingerprint: fp }),
+      runner.run("draft_requests", a.projectIds, { fingerprint: fp }),
+      runner.run("llm_status", a.projectIds, { endpoint: llm?.endpoint ?? "" }),
+      queryid && endpoint
+        ? runner.run("query_text", a.projectIds, { project_id: project, pairs: `${endpoint}:${queryid}` })
+        : Promise.resolve([] as Row[]),
+      manages(ctx, a, project),
+    ]);
+    const setUp = setUpOf(!!llm?.enabled, status[0]);
+    const req = requestState(attempts, requests);
+    const rewritable = queryid !== null;
+    return {
+      rewritable,
+      setUp,
+      canManage: manager,
+      canRequest: rewritable && setUp.ready && manager && isOpen(finding) && !req.pending && req.latestFinal,
+      pending: req.pending,
+      refused: req.refused,
+      nextAttempt: req.nextAttempt,
+      original: queryid && endpoint ? queryLabel(text[0] ?? { endpoint_id: endpoint, queryid }, full) : null,
+      attempts: attempts.map((r) => ({ ...r, sql: rewriteText(r.sql, full) })),
+    };
+  }
+
+  async function visibleFinding(ctx: Ctx, rawFp: string) {
+    const a = await who(ctx);
+    const fp = parseFingerprint(rawFp);
+    if (!fp) throw new HttpError(400, "invalid fingerprint");
+    const [finding] = await runner.run("finding", a.projectIds, { fingerprint: fp });
+    if (!finding) throw new HttpError(404, "not found");
+    return { a, fp, finding };
   }
 
   return {
@@ -341,11 +391,14 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals }: D
         manages(ctx, a, String(action.project_id)),
       ]);
       const retry = String(action.state) === "blocked" ? blockRetry(runs) : null;
-      const why = notActionable(action.finding_status, action.expires_at, ctx.now);
-      const legal = legalRequests(String(action.state), isTrue(action.verify_on_branch), retry, hasRollback(action.rollback_sql));
+      const rewrite = action.kind === REWRITE;
+      const why = rewrite ? null : notActionable(action.finding_status, action.expires_at, ctx.now);
+      const legal = rewrite ? []
+        : legalRequests(String(action.state), isTrue(action.verify_on_branch), retry, hasRollback(action.rollback_sql));
       const requests = why ? legal.filter((r) => !NEEDS_ACTIONABLE.includes(r)) : legal;
       return {
-        action, runs, canManage, retryAfterEnrolment: retry !== null && requests.length > 0, requests,
+        action: rewrite ? { ...action, sql: rewriteText(action.sql, canSeeText(a, String(action.project_id))) } : action,
+        runs, canManage, retryAfterEnrolment: retry !== null && requests.length > 0, requests,
         // said only when it hides a request the action's state would allow
         notActionable: why && requests.length < legal.length ? why : null,
       };
@@ -358,6 +411,7 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals }: D
       if (!isRequestKind(req)) throw new HttpError(400, "invalid request");
       if (!(await approvals.canManage(ctx, a, String(action.project_id))))
         throw new HttpError(403, "only the project owner or a manager can approve");
+      if (action.kind === REWRITE) throw new HttpError(409, ADVISORY);
       const why = NEEDS_ACTIONABLE.includes(req) ? notActionable(action.finding_status, action.expires_at, ctx.now) : null;
       if (why) throw new HttpError(409, why, "not_actionable");
       const state = String(action.state);
@@ -370,6 +424,7 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals }: D
       await approvals.insert({
         approval_id: approvalId,
         action_id: id,
+        fingerprint: sv(action.fingerprint),
         request: req,
         sql_hash: sqlHash(typeof target === "string" ? target : ""),
         approver: a.userName ?? ctx.user ?? "",
@@ -377,6 +432,38 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals }: D
       });
       const started = await approvals.trigger();
       return started === false ? { approvalId, message: SCHEDULED } : { approvalId };
+    },
+
+    /** The rewrite card of a finding: set-up, who may draft, the original query, every attempt (newest first). */
+    async drafts(ctx: Ctx, rawFp: string) {
+      const { a, finding } = await visibleFinding(ctx, rawFp);
+      return draftView(ctx, a, finding);
+    },
+
+    /** "Draft a rewrite" / Retry: records a draft approval for the next attempt and starts the fixer. */
+    async requestDraft(ctx: Ctx, rawFp: string) {
+      if (!approvals) throw new HttpError(404, "not found");
+      const { a, fp, finding } = await visibleFinding(ctx, rawFp);
+      if (!(await approvals.canManage(ctx, a, String(finding.project_id))))
+        throw new HttpError(403, "only the project owner or a manager can draft a rewrite");
+      const view = await draftView(ctx, a, finding);
+      if (!view.rewritable) throw new HttpError(409, "this finding has no query to rewrite");
+      if (!view.setUp.ready) throw new HttpError(409, `LLM drafting not set up: ${view.setUp.reason ?? ""}`);
+      if (!isOpen(finding)) throw new HttpError(409, "the finding is no longer open");
+      if (!view.canRequest) throw new HttpError(409, "a draft is already running for this finding");
+      const approvalId = approvals.newId();
+      await approvals.insert({
+        approval_id: approvalId,
+        action_id: "",
+        fingerprint: fp,
+        request: "draft",
+        sql_hash: draftToken(fp, view.nextAttempt),
+        approver: a.userName ?? ctx.user ?? "",
+        note: "",
+      });
+      const started = await approvals.trigger();
+      const out = { approvalId, attempt: view.nextAttempt };
+      return started === false ? { ...out, message: SCHEDULED } : out;
     },
 
     refresh(ctx: Ctx) {

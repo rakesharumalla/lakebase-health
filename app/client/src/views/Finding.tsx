@@ -3,18 +3,20 @@ import { Activity, Copy } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { ApiMessage } from "../ApiMessage";
-import { SeverityBadge, StatusBadge, ToneBadge } from "../components/Severity";
-import { riskTone } from "../components/tone";
+import { SectionCounts, SeverityBadge, StatusBadge, ToneBadge } from "../components/Severity";
+import { ITEM_CLASSES, riskTone, severityTone } from "../components/tone";
 import { GroupTitle, QueryText } from "../components/QueryText";
 import { RollbackLine } from "../components/Rollback";
 import { CodeBlock, DataTable, LoadingState, MonoId, PageHeader, SectionCard, ShowAllButton, TextLink, TruncatedNote } from "../components/ui";
-import { queryRefs, type GroupRow, type Page } from "../lib/findings";
+import { queryRefs, severityCounts, type GroupRow, type Page } from "../lib/findings";
 import { fmtTime, str, truthy, type Row } from "../lib/format";
 import { TIMELINE_CHECKS } from "../lib/constants";
 import { useApi } from "../lib/useApi";
 import { useQueryLabels } from "../lib/useQueryLabels";
 import { pageRows, useShowAll } from "../lib/useShowAll";
+import { cn } from "../lib/utils";
 import { ActionPanel } from "./ActionCard";
+import { DraftPanel } from "./DraftCard";
 
 export type FindingData = { finding: Row; history: Row[]; actions: Row[]; related: Page<GroupRow> };
 
@@ -58,8 +60,11 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** `actionCard` is the live approval card for the finding's latest action (rendered by the page, not in tests). */
-export function FindingView({ data, actionCard }: { data: FindingData; actionCard?: ReactNode }) {
+/**
+ * `actionCard` is the live approval card for the finding's latest action, `draftCard` the query rewrite card (both
+ * rendered by the page, not in tests).
+ */
+export function FindingView({ data, actionCard, draftCard }: { data: FindingData; actionCard?: ReactNode; draftCard?: ReactNode }) {
   const f = data.finding;
   const action = data.actions[0];
   // No action, or one expired (e.g. outside the fixer allowlist): the SQL is for a person to run
@@ -185,6 +190,8 @@ export function FindingView({ data, actionCard }: { data: FindingData; actionCar
 
       {actionCard}
 
+      {draftCard}
+
       {action && (
         <SectionCard title="Shadow mode">
           <p className="text-sm">
@@ -197,12 +204,18 @@ export function FindingView({ data, actionCard }: { data: FindingData; actionCar
       {data.related.total > 0 && (
         <SectionCard
           title="Related findings on this endpoint"
-          description={`${data.related.count ?? data.related.total} open`}
-          contentClassName="space-y-1"
+          description={
+            <SectionCounts open={data.related.count ?? data.related.total} counts={severityCounts(data.related, related)} />
+          }
+          contentClassName="space-y-1 px-0"
         >
-          <ul className="divide-y text-sm">
+          <ul className="divide-y border-y text-sm">
             {related.map((r) => (
-              <li key={r.key} className="flex items-start gap-x-3 py-2 first:pt-0 last:pb-0">
+              <li
+                key={r.key}
+                data-severity={r.severity}
+                className={cn("flex items-start gap-x-3 px-5 py-2 transition-colors", ITEM_CLASSES[severityTone(r.severity)])}
+              >
                 <span className="shrink-0 pt-0.5">
                   <SeverityBadge severity={r.severity} />
                 </span>
@@ -225,12 +238,12 @@ export function FindingView({ data, actionCard }: { data: FindingData; actionCar
             open={more.isOpen("related")}
             loading={more.isLoading("related")}
             onToggle={() => more.toggle("related")}
-            className="-mx-3 border-t pb-0"
+            className="px-5 pb-0"
           />
-          {more.errorOf("related") ? <p className="text-sm text-sev-critical-fg">{more.errorOf("related")}</p> : null}
+          {more.errorOf("related") ? <p className="px-5 text-sm text-sev-critical-fg">{more.errorOf("related")}</p> : null}
           {data.related.truncated ? (
             <TruncatedNote shown={data.related.shown ?? related.length} count={data.related.count ?? data.related.total}
-                           limit={data.related.limit ?? data.related.shown ?? 0} className="px-0" />
+                           limit={data.related.limit ?? data.related.shown ?? 0} className="px-5" />
           ) : null}
         </SectionCard>
       )}
@@ -244,5 +257,11 @@ export default function FindingPage() {
   if (r.error) return <ApiMessage error={r.error} />;
   if (!r.data) return <LoadingState label="Loading finding" />;
   const action = r.data.actions[0];
-  return <FindingView data={r.data} actionCard={action ? <ActionPanel actionId={str(action.action_id)} /> : undefined} />;
+  return (
+    <FindingView
+      data={r.data}
+      actionCard={action ? <ActionPanel actionId={str(action.action_id)} /> : undefined}
+      draftCard={<DraftPanel fingerprint={str(r.data.finding.fingerprint)} />}
+    />
+  );
 }

@@ -26,7 +26,7 @@ Sources used (as of the docs dated Sep–Oct 2026):
 | Query cost | Tested: `system.lakebase` statements spent **200–3,000 s compiling** and about 1 s executing, even for `LIMIT 1`. Running 16 statements in parallel made compile time worse. Copy rows into Delta first, then run checks on the copies (DESIGN.md §2a). Don't query these tables live from an app. |
 | Planning stats | `pg_stat_statements.track_planning` is off, so `total_plan_time`/`plans` are 0 or NULL. `mean_plan_ms` will be empty. |
 | Two caches | **Postgres shared buffers** (`shared_blks_hit/read`) sit in front of the **Local File Cache (LFC)**, the "compute cache / local SSD cache" in the UI (`lfc_hits/misses`). The LFC sits in front of the remote **pageserver** (`neon_getpage_*`). The LFC hit rate is the one the UI's 99% target refers to. |
-| Extensions | Available: `pg_stat_statements`, `pg_hint_plan`, `pgstattuple`, `pgrowlocks`, `pg_prewarm`. **Not available:** `hypopg`, `pg_repack`, `pg_cron`, `auto_explain` (per‑execution plans come from `system.lakebase.plan_history` instead). |
+| Extensions | Available: `pg_stat_statements`, `pgstattuple`, `pgrowlocks`, `pg_prewarm`. `pg_hint_plan` can be created but its library is not loaded, and `LOAD`, `ALTER ROLE/DATABASE … SET session_preload_libraries` and `pg_hint_plan.enable_hint_table` are refused for non-superusers (tested 2026-10-29): hint comments do not change plans. **Not available:** `hypopg`, `pg_repack`, `pg_cron`, `auto_explain` (per‑execution plans come from `system.lakebase.plan_history` instead). |
 | Connection limits | 0.5 CU=105, 1=218, 2=443, 4=894, 8=1,795, 16=3,597, ≥24 CU=3,993. With autoscaling the limit is the limit for `min(max_CU, 8 × min_CU)`. `SHOW max_connections` reads higher because it includes reserved slots. |
 | Sizing facts | 1 CU ≈ 2 GB RAM. LFC ≤ 75% of RAM. Autoscale 0.5–32 CU, and max − min ≤ 16 CU. Fixed sizes run 36–112 CU. 8 TB logical data per branch. |
 
@@ -468,7 +468,7 @@ GROUP BY ALL ORDER BY p.endpoint_id, p.queryid, first_seen;
 **If regressed:**
 1. Correlate with `ddl_history` (check 31) and with stats changes: a stale `ANALYZE` after a bulk load is a common cause.
 2. Fix with `ANALYZE <table>`, extended statistics (`CREATE STATISTICS`) for correlated columns, or a higher `default_statistics_target` on skewed columns.
-3. As a guarded last resort, pin the good plan with **pg_hint_plan** (check 15).
+3. If the plan stays bad, rewrite the query: the app's **Draft a rewrite** verifies an LLM-drafted rewrite on a branch. (pg_hint_plan pins need its library loaded, which Lakebase refuses without a support request.)
 
 ### 15. Bad plans: disk spills, hash spills, misestimates, missed index scans
 Uses `plan_history.plan_json`, which requires `databricks_pii_access` membership.
@@ -503,14 +503,14 @@ factor). Platform roles such as `databricks_writer_<n>` are excluded.
 
 **Fix playbook (each fix should be tested on a branch, see DESIGN.md):**
 
-| Symptom | Fix | pg_hint_plan directive (guarded fallback) |
+| Symptom | Fix | pg_hint_plan directive (only if Lakebase loads the library) |
 |---|---|---|
 | Disk sort / hash batches > 1 | Raise `work_mem` **per role or session** (`ALTER ROLE app SET work_mem='64MB'`), not globally. Add an index that delivers the sort order. | `/*+ Set(work_mem "64MB") */` |
 | Seq scan on a selective predicate | Create the index (B‑tree, partial, or covering `INCLUDE`). | `/*+ IndexScan(t idx_name) */` |
 | Nested loop with a 100× underestimate | `ANALYZE`, `CREATE STATISTICS (dependencies, ndistinct)` on the correlated columns. | `/*+ HashJoin(a b) */` or `/*+ Rows(a b #10000) */` |
 | Wrong join order | Rewrite the query (CTE `MATERIALIZED`, explicit join), or fix the estimates. | `/*+ Leading((a b) c) */` |
 
-To use pg_hint_plan: `CREATE EXTENSION pg_hint_plan;`, then prefix the query with the hint comment. Alternatively, register hints in `hint_plan.hints` by `query_id` with `pg_hint_plan.enable_hint_table = on`, which pins a plan without changing app code. Treat hints as technical debt: record why each one exists, and re‑validate after major version upgrades.
+pg_hint_plan on Lakebase (tested 2026-10-29): the extension installs, but its library is not loaded and non-superusers may not `LOAD` it, add it to `session_preload_libraries` or set `pg_hint_plan.enable_hint_table`, so the directives above do nothing until a support request loads it per endpoint. Where it is loaded: `CREATE EXTENSION pg_hint_plan;`, then prefix the query with the hint comment. Alternatively, register hints in `hint_plan.hints` by `query_id` with `pg_hint_plan.enable_hint_table = on`, which pins a plan without changing app code. Treat hints as technical debt: record why each one exists, and re‑validate after major version upgrades.
 
 ### 16. Storage (pageserver) wait per query (Lakebase‑specific)
 **What:** how much of each query's time goes to fetching pages from remote storage after an LFC miss.

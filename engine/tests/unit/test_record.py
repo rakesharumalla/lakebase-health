@@ -131,3 +131,15 @@ def test_a_project_the_engine_does_not_list_is_left_alone():
     persist(sql, CFG, "r1", NOW, [_on("b-old")], SPECS, [], branches={"other": {"b"}})
     persist(sql, CFG, "r2", NOW + timedelta(hours=1), [], SPECS, [], branches={"other": {"b"}})
     assert sql.tables[T("findings")][0]["status"] == "new"
+def test_an_llm_rewrite_neither_blocks_the_check_fix_nor_is_merged_by_the_engine():
+    fp = fingerprint("c1", "p", "e", "o")
+    rewrite = {"action_id": "d" * 32, "fingerprint": fp, "check_id": "c1", "kind": "query_rewrite", "sql": "SELECT 1",
+               "rollback_sql": None, "risk": "low", "reversible": True, "verify_on_branch": True, "state": "verified",
+               "created_at": NOW, "updated_at": NOW, "expires_at": NOW + timedelta(days=7), "rollback_note": "x",
+               "origin": "llm", "draft_id": "d" * 32}
+    sql = FakeSql()
+    sql.tables[T("proposed_actions")] = [dict(rewrite)]
+    counts = persist(sql, CFG, "r1", NOW, [outcome()], SPECS, [ep()])
+    assert counts["actions_proposed"] == 1  # a verified rewrite is not a fixer state of the check's fix
+    rows = sql.tables[T("proposed_actions")]
+    assert rows[0] == rewrite and rows[1]["kind"] == "ddl" and rows[1]["state"] == "proposed"

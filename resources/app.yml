@@ -23,5 +23,9 @@ resources:
             value: ${var.pii_masking}
           - name: FIXER_JOB_ID
             value: ${resources.jobs.lakebase_health_fixer.id}
+          - name: LLM_ENABLED  # "false" hides "Draft a rewrite"; the fixer records the endpoint's status in llm_status
+            value: ${var.llm_enabled}
+          - name: LLM_ENDPOINT
+            value: ${var.llm_endpoint}
       lifecycle:
         started: true

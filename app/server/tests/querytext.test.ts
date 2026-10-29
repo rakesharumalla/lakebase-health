@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { MAX_QUERY_PAIRS, parseQueryPairs, queryLabel, skeleton } from "../lib/querytext";
 
@@ -27,6 +28,16 @@ describe("skeleton", () => {
 describe("queryLabel", () => {
   const row = (o: Record<string, unknown>) => ({ endpoint_id: "ep-a", queryid: "42", ...o });
 
+  it("prefers the analysis job's query_texts copy of pg_stat_statements over system.lakebase text", () => {
+    expect(
+      queryLabel(row({ qt_text: "SELECT a FROM t WHERE b = $1", plan_text: "SELECT 1", plan_truncated: "false", stat_text: "x" }), true),
+    ).toMatchObject({ text: "SELECT a FROM t WHERE b = $1", kind: "full", truncated: false });
+    expect(queryLabel(row({ qt_text: "<REDACTED>", plan_text: "<REDACTED>", stat_text: "SELECT $1" }), true).text).toBe("SELECT $1");
+    expect(queryLabel(row({ qt_text: "SELECT x FROM t WHERE s = $1" }), false)).toMatchObject({
+      text: "SELECT x FROM t WHERE s = $1", kind: "skeleton",
+    });
+  });
+
   it("prefers complete plan text, then pg_stat_statements text, then truncated plan text", () => {
     expect(queryLabel(row({ plan_text: "SELECT 1", plan_truncated: "false", stat_text: "SELECT $1" }), true)).toMatchObject({
       text: "SELECT 1", label: "SELECT 1", kind: "full", truncated: false,
@@ -46,7 +57,7 @@ describe("queryLabel", () => {
   });
 
   it("falls back to 'query <id>' when there is no text, including UC's <REDACTED>", () => {
-    for (const r of [row({}), row({ plan_text: "<REDACTED>", stat_text: "<REDACTED>" }), row({ plan_text: "  " })]) {
+    for (const r of [row({}), row({ qt_text: "<REDACTED>", plan_text: "<REDACTED>", stat_text: "<REDACTED>" }), row({ plan_text: "  " })]) {
       expect(queryLabel(r, true)).toEqual({ endpoint_id: "ep-a", queryid: "42", text: null, label: "query 42", kind: "none", truncated: false });
     }
   });
@@ -63,5 +74,17 @@ describe("parseQueryPairs", () => {
     }
     const many = Array.from({ length: MAX_QUERY_PAIRS + 1 }, (_, i) => `ep-a:${i}`).join(",");
     expect(parseQueryPairs(many)).toBeNull();
+  });
+});
+
+describe("query_text lookup", () => {
+  const sql = readFileSync(new URL("../queries/query_text.sql", import.meta.url), "utf8");
+
+  it("reads query_texts first, scoped to the caller's projects, and system.lakebase text only when not redacted", () => {
+    expect(sql).toContain("{catalog}.lakebase_health.query_texts");
+    expect(sql).toMatch(/q\.project_id = :project_id AND array_contains\(split\(:project_ids, ','\), q\.project_id\)/);
+    expect(sql).toMatch(/q\.captured_at >= current_timestamp\(\) - INTERVAL 7 DAYS/);
+    expect(sql).toContain("AS qt_text");
+    expect(sql.match(/NOT LIKE '<REDACTED%'/g)).toHaveLength(3);
   });
 });

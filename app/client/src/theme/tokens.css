@@ -91,6 +91,27 @@
   --lbh-sev-neutral-bg: #f2f4f7;
   --lbh-sev-neutral-border: #e4e7ec;
 
+  /*
+   * Bold severity: solid critical/warning badges, an outlined info badge, a 4 px row edge and a row
+   * tint for critical and warning. Edges are non-text (>= 3:1 against the row, its hover and the card).
+   * The warning edge is #FDB022 darkened at the same hue (38.9 deg): #FDB022 is 1.8:1 on its tint.
+   */
+  --lbh-sev-critical-solid-bg: #b42318;
+  --lbh-sev-critical-solid-fg: #ffffff;
+  --lbh-sev-warning-solid-bg: #fdb022;
+  --lbh-sev-warning-solid-fg: #3a2a00;
+  --lbh-sev-info-outline: #1849a9;
+  --lbh-sev-ok-solid-bg: #067647;
+  --lbh-sev-ok-solid-fg: #ffffff;
+  --lbh-sev-critical-edge: #b42318;
+  --lbh-sev-warning-edge: #bc7b02;
+  --lbh-sev-info-edge: #1849a9;
+  --lbh-sev-ok-edge: #067647;
+  --lbh-sev-critical-row: var(--lbh-sev-critical-bg);
+  --lbh-sev-critical-row-hover: #fee4e2;
+  --lbh-sev-warning-row: var(--lbh-sev-warning-bg);
+  --lbh-sev-warning-row-hover: #fef0c7;
+
   /* Categorical chart palette (wait classes). Pairwise OKLab distance >= 0.16, >= 0.09 under
      simulated deuteranopia/protanopia. */
   --lbh-chart-1: #2272b4;
@@ -142,6 +163,13 @@
   --lbh-sev-neutral-fg: #d0d5dd;
   --lbh-sev-neutral-bg: #1f2a30;
   --lbh-sev-neutral-border: #344054;
+  --lbh-sev-info-outline: #84caff;
+  --lbh-sev-critical-edge: #f97066;
+  --lbh-sev-warning-edge: #fdb022;
+  --lbh-sev-info-edge: #84caff;
+  --lbh-sev-ok-edge: #75e0a7;
+  --lbh-sev-critical-row-hover: #4a1a16;
+  --lbh-sev-warning-row-hover: #4a3510;
   --lbh-chart-3: #dce3e6;
   --lbh-chart-axis: #9aa9ae;
   --lbh-chart-title: #f9f7f4;
@@ -178,6 +206,13 @@
     --lbh-sev-neutral-fg: #d0d5dd;
     --lbh-sev-neutral-bg: #1f2a30;
     --lbh-sev-neutral-border: #344054;
+    --lbh-sev-info-outline: #84caff;
+    --lbh-sev-critical-edge: #f97066;
+    --lbh-sev-warning-edge: #fdb022;
+    --lbh-sev-info-edge: #84caff;
+    --lbh-sev-ok-edge: #75e0a7;
+    --lbh-sev-critical-row-hover: #4a1a16;
+    --lbh-sev-warning-row-hover: #4a3510;
     --lbh-chart-3: #dce3e6;
     --lbh-chart-axis: #9aa9ae;
     --lbh-chart-title: #f9f7f4;

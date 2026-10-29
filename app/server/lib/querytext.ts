@@ -85,17 +85,21 @@ const usable = (v: unknown): string | null => {
 const isTrue = (v: unknown) => v === true || v === "true";
 
 /**
- * Chooses the text for one (endpoint, queryid) from the query_text lookup row: complete plan_history text, else
- * pg_stat_statements text, else truncated plan text. `full` false returns only the skeleton.
+ * Chooses the text for one (endpoint, queryid) from the query_text lookup row: the analysis job's query_texts copy of
+ * pg_stat_statements (enrolled branches), else complete plan_history text, else pg_stat_statements telemetry text,
+ * else truncated plan text; system.lakebase text only when it is not <REDACTED>. `full` false returns only the
+ * skeleton.
  */
 export function queryLabel(row: Record<string, unknown>, full: boolean): QueryLabel {
   const endpoint_id = typeof row.endpoint_id === "string" ? row.endpoint_id : "";
   const queryid = typeof row.queryid === "string" || typeof row.queryid === "number" ? String(row.queryid) : "";
+  const own = usable(row.qt_text);
   const plan = usable(row.plan_text);
   const stat = usable(row.stat_text);
   const planTruncated = isTrue(row.plan_truncated);
   let chosen: { text: string; truncated: boolean } | null = null;
-  if (plan && !planTruncated) chosen = { text: plan, truncated: false };
+  if (own) chosen = { text: own, truncated: false };
+  else if (plan && !planTruncated) chosen = { text: plan, truncated: false };
   else if (stat) chosen = { text: stat, truncated: false };
   else if (plan) chosen = { text: plan, truncated: true };
   if (!chosen) return { endpoint_id, queryid, text: null, label: `query ${queryid}`, kind: "none", truncated: false };

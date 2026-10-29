@@ -71,6 +71,30 @@ describe("ProjectView", () => {
     expect(within(card).getAllByText(/^query -?\d+$/).length).toBeGreaterThan(0);
   });
 
+  it("marks each row with its severity (edge and tint) and keeps the text label", () => {
+    view();
+    const card = perfCard();
+    const rows = within(card).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.getAttribute("data-severity"))).toEqual(perf.rows.map((r) => r.severity));
+    const critical = rows.find((r) => r.getAttribute("data-severity") === "critical")!;
+    expect(critical.className).toContain("bg-sev-critical-row");
+    expect(within(critical).getByText("critical")).toBeTruthy();
+  });
+
+  it("shows per-severity chips on a fully loaded section only", () => {
+    const complete = data.sections.find((s) => s.rows.length === s.total && s.rows.some((r) => r.severity === "warning"))!;
+    const warnings = new Set(
+      complete.rows
+        .flatMap((r): { severity: string; fingerprint: string }[] => (r.kind === "query" && r.issues.length ? r.issues : [r]))
+        .filter((i) => i.severity === "warning")
+        .map((i) => i.fingerprint),
+    ).size;
+    view({ ...data, sections: data.sections.map((s) => ({ ...s, count: undefined })) });
+    const card = screen.getByRole("heading", { name: new RegExp(complete.category, "i") }).closest("[data-slot=card]") as HTMLElement;
+    expect(within(card).getByText(`${warnings} warning`)).toBeTruthy();
+    expect(within(perfCard()).queryByText(/^\d+ (critical|warning|info)$/)).toBeNull();
+  });
+
   it("lists the top 10 and fetches the rest only on Show all", async () => {
     stubFetch((url) => (url.includes("/findings?section=performance") ? { section: "performance", total: perf.total, rows: [...perf.rows, ...perf.rows.map((r) => ({ ...r, key: `${r.key}-more` }))] } : undefined));
     view();

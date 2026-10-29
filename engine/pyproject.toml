@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "lakebase_health"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6", "psycopg[binary]>=3.1", "databricks-sdk>=0.81.0"]
+dependencies = ["pyyaml>=6", "psycopg[binary]>=3.1", "databricks-sdk>=0.81.0", "sqlglot>=30.24,<31"]
 
 [project.scripts]
 main = "lakebase_health.jobs.run:main"
@@ -17,7 +17,7 @@ fix = "lakebase_health.jobs.fix:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-lakebase_health = ["checks/*.yaml", "checks/*/*.yaml"]
+lakebase_health = ["checks/*.yaml", "checks/*/*.yaml", "fixer/draft/prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

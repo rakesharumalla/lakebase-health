@@ -10,6 +10,7 @@ SELECT a.action_id, a.kind, a.sql, a.rollback_sql, a.rollback_note, a.risk, a.re
 FROM {catalog}.lakebase_health.proposed_actions a
 JOIN {catalog}.lakebase_health.findings f ON f.fingerprint = a.fingerprint
 LEFT JOIN sl ON sl.action_id = a.action_id
-WHERE a.fingerprint = :fingerprint AND array_contains(split(:project_ids, ','), f.project_id)
+WHERE a.fingerprint = :fingerprint AND coalesce(a.origin, 'check') = 'check'
+  AND array_contains(split(:project_ids, ','), f.project_id)
 ORDER BY a.created_at DESC
 LIMIT 5

@@ -24,6 +24,7 @@ class Recorder:
         self.items, self.claim_ok, self.stuck = items, claim_ok, list(stuck)
         self.states, self.runs, self.events, self.event_calls = [], [], [], []
         self.sessions, self.recovered, self.executed, self.branch_closed = [], [], [], 0
+        self.kinds = []
 
 
 def deps(rec, judged=True, branch_error=None, execute=None):
@@ -39,6 +40,7 @@ def deps(rec, judged=True, branch_error=None, execute=None):
     @contextmanager
     def session(endpoint, host, db, kind):
         rec.sessions.append(endpoint)
+        rec.kinds.append(kind)
         yield object()
 
     def events(sql, cfg, rows, now):
@@ -63,13 +65,16 @@ def deps(rec, judged=True, branch_error=None, execute=None):
         "branch": branch, "session": session,
         "target": lambda w, w_action: {"project": "projects/x", "branch": "projects/x/branches/production",
                                        "endpoint": "projects/x/branches/production/endpoints/primary", "host": "h", "database": "db"},
-        "samples": lambda sql, cfg, project_id, table: [{"queryid": "1", "query": "SELECT secret FROM t WHERE x = $1",
-                                                          "params": [["4111"]], "is_write": False}],
+        "samples": lambda conn, table, database: [{"queryid": "1", "query": "SELECT secret FROM t WHERE x = $1",
+                                                    "mean_rows": 1.0, "is_write": False}],
+        "params": lambda conn, q, mean_rows: [["4111"]],
         "measure": lambda conn, q, params: {"ms": 10.0, "nodes": [], "indexes": []},
         "judge": lambda kind, ix, before, after, **kw: rec.__dict__.setdefault("judged_with", []).append(
             (kind, kw, before)) or {"passed": judged, "rules": []},
         "execute": do_execute,
         "recover": recover,
+        "stuck_drafts": lambda sql, cfg, now: [],
+        "pending_drafts": lambda sql, cfg: [],
     }
 
 
@@ -138,7 +143,9 @@ def test_rollback_runs_rollback_sql_with_action_id():
 def test_verify_applies_on_branch_endpoint_only_with_action_id():
     rec = Recorder([work()])
     fix.run_fixer(None, None, CFG, "fixer", deps=deps(rec), now=NOW)
-    assert rec.sessions == ["e"] and rec.executed == [(SQL, "a1")] and rec.branch_closed == 1
+    # the target is only read (pg_stat_statements, read-only stats session); the fix and timings run on the branch
+    assert rec.sessions == ["projects/x/branches/production/endpoints/primary", "e"]
+    assert rec.kinds == ["stats", "create_index"] and rec.executed == [(SQL, "a1")] and rec.branch_closed == 1
 
 
 def test_branch_apply_failure_is_verify_failed_with_error():
@@ -336,7 +343,8 @@ def test_privilege_error_returned_by_execute_blocks():
 def test_branch_error_inside_body_is_not_branch_unavailable():
     rec = Recorder([work()])
     d = deps(rec)
-    d["samples"] = lambda *a: [{"queryid": "1", "query": "SELECT 1", "params": [[]], "is_write": False}]
+    d["samples"] = lambda *a: [{"queryid": "1", "query": "SELECT 1", "mean_rows": None, "is_write": False}]
+    d["params"] = lambda *a: [[]]
     d["measure"] = lambda *a: (_ for _ in ()).throw(ValueError("boom"))
     fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
     assert rec.runs[-1]["error"] == "ValueError: boom" and rec.branch_closed == 1
@@ -404,22 +412,52 @@ def test_drop_index_verify_samples_the_indexed_table_and_explains_empty_samples(
     rec = Recorder([w])
     d = deps(rec)
     asked = []
-    d["samples"] = lambda sql, cfg, project_id, table: asked.append(table) or []
-    d["no_samples"] = lambda sql, cfg, project_id, table: f"0 plans on {table}; 812 redacted"
+    d["samples"] = lambda conn, table, database: asked.append((table, database)) or []
     d["judge"] = fix.verify.judge
     fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
-    assert asked == ["hc_test.customers"]
+    assert asked == [("hc_test.customers", "db")]
     report = json.loads(rec.runs[-1]["report"])
     [rule] = [r for r in report["rules"] if r["rule"] == "affected_queries"]
-    assert not rule["passed"] and "812 redacted" in rule["detail"] and report["samples"] == "0 plans on hc_test.customers; 812 redacted"
+    why = "0 statements in pg_stat_statements on database db mention hc_test.customers"
+    assert not rule["passed"] and why in rule["detail"] and report["samples"] == why
+
+
+def test_statements_whose_parameters_cannot_be_sampled_are_skipped_and_explained():
+    from lakebase_health.fixer.params import Unsampled
+    drop = "DROP INDEX CONCURRENTLY hc_test.customers_region_idx;"
+    w = work(sql=drop)
+    w.action["rollback_sql"] = "CREATE INDEX CONCURRENTLY customers_region_idx ON hc_test.customers USING btree (region);"
+    rec = Recorder([w])
+    d = deps(rec)
+    d["samples"] = lambda conn, table, database: [{"queryid": "7", "query": "SELECT $1::int FROM hc_test.customers",
+                                                    "mean_rows": 1.0, "is_write": False}]
+    d["params"] = lambda conn, q, mean_rows: (_ for _ in ()).throw(Unsampled("parameter $1 is not bound to a column"))
+    d["judge"] = fix.verify.judge
+    fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
+    report = json.loads(rec.runs[-1]["report"])
+    assert report["samples"].endswith("1 could not be sampled: query 7: parameter $1 is not bound to a column")
+    assert report["queries"] == []
+
+
+def test_values_drawn_on_the_branch_are_never_in_the_report():
+    rec = Recorder([work()])
+    d = deps(rec)
+    d["params"] = lambda conn, q, mean_rows: [["1600004111"], ["1600200000"]]
+    seen = []
+    d["measure"] = lambda conn, q, params, repeats=3: seen.append(params) or {"ms": 4.0, "nodes": [], "indexes": []}
+    fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
+    assert seen[0] == [["1600004111"], ["1600200000"]]
+    assert "1600004111" not in rec.runs[-1]["report"] and "1600200000" not in rec.runs[-1]["report"]
+    assert "1600004111" not in json.dumps(rec.events, default=str)
 
 
 def test_write_queries_go_through_the_alternating_probe_and_the_report_keeps_the_samples():
     rec = Recorder([work()])
     d = deps(rec)
-    d["samples"] = lambda sql, cfg, p, t: [
-        {"queryid": "r", "query": "SELECT 1", "params": [[]], "is_write": False},
-        {"queryid": "w", "query": "INSERT INTO t VALUES (1)", "params": [[]], "is_write": True}]
+    d["samples"] = lambda conn, t, db: [
+        {"queryid": "r", "query": "SELECT 1", "mean_rows": None, "is_write": False},
+        {"queryid": "w", "query": "INSERT INTO t VALUES (1)", "mean_rows": None, "is_write": True}]
+    d["params"] = lambda *a: [[]]
     seen = []
     d["measure"] = lambda conn, q, params, repeats=3: seen.append((q, repeats)) or {"ms": 4.0, "nodes": [], "indexes": []}
     fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
@@ -432,8 +470,9 @@ def test_write_queries_go_through_the_alternating_probe_and_the_report_keeps_the
 def test_create_index_verify_judges_writes_against_the_new_index_columns_without_storing_query_text():
     rec = Recorder([work()])
     d = deps(rec)
-    d["samples"] = lambda sql, cfg, p, t: [
-        {"queryid": "w", "query": "UPDATE hc_test.orders SET status = 'x'", "params": [[]], "is_write": True}]
+    d["samples"] = lambda conn, t, db: [
+        {"queryid": "w", "query": "UPDATE hc_test.orders SET status = 'x'", "mean_rows": None, "is_write": True}]
+    d["params"] = lambda *a: [[]]
     d["measure"] = lambda conn, q, params, repeats=3: {"ms": 4.0, "nodes": [], "indexes": []}
     fix.run_fixer(None, None, CFG, "fixer", deps=d, now=NOW)
     [(kind, kw, before)] = rec.judged_with

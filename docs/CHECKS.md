@@ -320,12 +320,12 @@ ALTER ROLE {role_ident} RESET work_mem;
 | Thresholds | warning when measure > 2; critical when measure > 10 |
 | Query scope | platform, engine and fixer roles are filtered out; one finding per query |
 
-**What it means.** Ratio between the slowest and fastest median latency of a query's plan shapes on the same endpoint (7 days, >= 5 executions per shape). Fix statistics first; pin the good plan with pg_hint_plan only as a last resort.
+**What it means.** Ratio between the slowest and fastest median latency of a query's plan shapes on the same endpoint (7 days, >= 5 executions per shape). Fix statistics first; if the bad plan persists, draft a query rewrite on this finding (pg_hint_plan hints cannot be loaded on Lakebase without a support request).
 
 **Candidate fix** (kind `manual`, risk `moderate`):
 
 ```text
-ANALYZE the tables of query {object}; if the bad plan persists, pin the good one with a pg_hint_plan hint.
+ANALYZE the tables of query {object}; if the bad plan persists, use Draft a rewrite on this finding.
 ```
 
 **Fixer.** Guidance only (`manual`). The app shows it as text; nothing is proposed to the fixer.

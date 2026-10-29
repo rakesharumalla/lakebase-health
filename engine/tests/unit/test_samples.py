@@ -1,52 +1,38 @@
+"""The fix loop's affected queries (spec §10): text from pg_stat_statements on the source branch, in the finding's
+database, busiest first; parameter values come from the data on the verification branch (fixer/params.py)."""
 import json
+from types import SimpleNamespace
 
-from lakebase_health.fixer.samples import affected_queries, parse_params
-
-
-def test_parse_params():
-    assert parse_params("$1 = '110448'") == ["110448"]
-    assert parse_params("$1 = 'user36', $2 = 'it''s', $3 = 'a, b'") == ["user36", "it's", "a, b"]
-    assert parse_params("") == [] and parse_params(None) == []
-    assert parse_params("$1 = NULL") == [None]
-    assert parse_params("garbage") is None
+from lakebase_health.fixer.samples import affected_queries
 
 
-class _Cfg:
-    def raw(self, name):
-        return f"main.hc.raw_{name}"
+class _Conn:
+    """A read-only stats session on the source branch: pg_stat_statements rows (queryid, query, calls, rows, ms)."""
+
+    def __init__(self, rows, installed=True):
+        self.rows, self.installed, self.ran = rows, installed, []
+
+    def execute(self, stmt, args=None):
+        self.ran.append((stmt, args))
+        rows = [(self.installed,)] if stmt.startswith("SELECT to_regclass") else self.rows
+        return SimpleNamespace(fetchone=lambda: rows[0] if rows else None, fetchall=lambda: rows)
 
 
-class _Sql:
-    def __init__(self, rows):
-        self.rows, self.calls = rows, []
-
-    def query(self, stmt, args=None):
-        self.calls.append((stmt, args))
-        return self.rows
-
-
-def test_affected_queries_shapes_rows_and_binds_params():
-    rows = [
-        {"queryid": "1", "query": "SELECT * FROM t WHERE id = $1;", "params": ["$1 = '5'", "bad", "$1 = 'it''s'"]},
-        {"queryid": "2", "query": " update t set a = 1 ", "params": None},
-    ]
-    sql = _Sql(rows)
-    out = affected_queries(sql, _Cfg(), "proj", "public.t")
-    assert out[0] == {"queryid": "1", "query": "SELECT * FROM t WHERE id = $1", "params": [["5"], ["it's"]], "is_write": False}
-    assert out[1]["params"] == [[]] and out[1]["is_write"] is True
-    stmt, args = sql.calls[0]
-    assert "main.hc.raw_plan_history" in stmt and args["p"] == "proj" and args["rx"] == _table_regex("public.t")
+def test_affected_queries_are_the_databases_statements_on_the_table_busiest_first():
+    rows = [("1", "SELECT * FROM t WHERE id = $1;", 10, 10, 900.0), ("2", " update t set a = $1 ", 4, 4, 50.0),
+            ("3", "SELECT * FROM other WHERE id = $1", 9, 9, 40.0)]
+    conn = _Conn(rows)
+    out = affected_queries(conn, "public.t", "app")
+    assert out == [{"queryid": "1", "query": "SELECT * FROM t WHERE id = $1", "mean_rows": 1.0, "is_write": False},
+                   {"queryid": "2", "query": "update t set a = $1", "mean_rows": 1.0, "is_write": True}]
+    stmt, args = conn.ran[-1]
+    assert "FROM pg_stat_statements s" in stmt and args == ("app",)  # the finding's database, not the whole project
 
 
-def test_affected_queries_drops_unmeasurable_placeholder_queries_and_unparseable_samples():
-    rows = [
-        {"queryid": "1", "query": "SELECT * FROM t WHERE id = $1", "params": ["garbage"]},
-        {"queryid": "2", "query": "SELECT * FROM t WHERE id = $1", "params": None},
-        {"queryid": "3", "query": "SELECT * FROM t WHERE id = $1", "params": ["garbage", "$1 = '7'"]},
-        {"queryid": "4", "query": "SELECT count(*) FROM t", "params": []},
-    ]
-    out = affected_queries(_Sql(rows), _Cfg(), "proj", "t")
-    assert [(q["queryid"], q["params"]) for q in out] == [("3", [["7"]]), ("4", [[]])]
+def test_affected_queries_keep_the_limit_and_need_pg_stat_statements():
+    rows = [(str(i), f"SELECT {i} FROM t", 1, 1, float(100 - i)) for i in range(20)]
+    assert [q["queryid"] for q in affected_queries(_Conn(rows), "t", "app", limit=3)] == ["0", "1", "2"]
+    assert affected_queries(_Conn(rows, installed=False), "t", "app") == []
 
 
 # --- live criterion 4 (redundant_index on hc_test.customers): the fixer searched query text for the index name ---
@@ -70,23 +56,6 @@ def test_table_regex_respects_the_schema():
         assert not rx.search(text), text
 
 
-class _Seq:
-    """Answers each query with the next row list."""
-    def __init__(self, *answers):
-        self.answers, self.calls = list(answers), []
-
-    def query(self, stmt, args=None):
-        self.calls.append((stmt, args))
-        return self.answers.pop(0) if self.answers else []
-
-
-def test_affected_queries_widens_the_window_when_the_last_day_has_nothing():
-    sql = _Seq([], [{"queryid": "9", "query": "SELECT count(*) FROM customers", "params": []}])
-    out = affected_queries(sql, _Cfg(), "proj", "hc_test.customers")
-    assert [q["queryid"] for q in out] == ["9"]
-    assert "INTERVAL 24 HOURS" in sql.calls[0][0] and "INTERVAL 168 HOURS" in sql.calls[1][0]
-
-
 def test_sample_table_for_a_drop_is_the_indexed_table():
     drop = parse("DROP INDEX CONCURRENTLY hc_test.customers_region_idx;")
     rb = "CREATE INDEX CONCURRENTLY customers_region_idx ON hc_test.customers USING btree (region);"
@@ -100,25 +69,23 @@ def test_sample_table_for_a_drop_is_the_indexed_table():
     assert sample_table(create, {}) == "hc_test.orders"
 
 
-def test_no_samples_reason_names_redacted_rows():
-    sql = _Seq([{"matched": 0, "redacted": 812, "placeholders": 0}])
-    why = no_samples_reason(sql, _Cfg(), "proj", "hc_test.customers")
-    assert "hc_test.customers" in why and "812" in why and "redacted" in why
-    assert ":p" not in why and sql.calls[0][1]["p"] == "proj"
-    sql = _Seq([{"matched": 40, "redacted": 0, "placeholders": 40}])
-    assert "bind parameters" in no_samples_reason(sql, _Cfg(), "proj", "hc_test.customers")
-    assert "could not tell" in no_samples_reason(sql, _Cfg(), "proj", None)
+def test_no_samples_reason_gives_counts_and_parameter_reasons_never_values():
+    why = no_samples_reason(0, [], "hc_test.customers", "app")
+    assert why == "0 statements in pg_stat_statements on database app mention hc_test.customers"
+    why = no_samples_reason(2, ["query 7: parameter $2 is not bound to a column", "query 9: no rows with values in t"],
+                            "hc_test.customers", "app")
+    assert why.startswith("2 statements") and "2 could not be sampled: query 7: parameter $2" in why
+    assert "could not tell" in no_samples_reason(0, [], None, "app")
 
 
 def test_only_single_select_or_dml_statements_are_sampled():
     """Live criterion 4: a session's 'SET ...; SET ...; EXPLAIN ... customers' text failed PREPARE with SyntaxError."""
-    rows = [
-        {"queryid": "1", "query": "SET enable_seqscan = off; SET enable_bitmapscan = off; EXPLAIN (COSTS OFF) "
-                                  "SELECT count(*) FROM hc_test.customers WHERE region = 'x'", "params": []},
-        {"queryid": "2", "query": "EXPLAIN SELECT 1 FROM customers", "params": []},
-        {"queryid": "3", "query": "CREATE INDEX i ON hc_test.customers (a)", "params": []},
-        {"queryid": "4", "query": "  with c AS (SELECT 1 FROM customers) SELECT * FROM c;", "params": []},
-        {"queryid": "5", "query": "DELETE FROM customers WHERE id = $1", "params": ["$1 = '3'"]},
-    ]
-    out = affected_queries(_Sql(rows), _Cfg(), "proj", "hc_test.customers")
+    rows = [(qid, text, 1, 1, 1.0) for qid, text in (
+        ("1", "SET enable_seqscan = off; SET enable_bitmapscan = off; EXPLAIN (COSTS OFF) "
+              "SELECT count(*) FROM hc_test.customers WHERE region = $1"),
+        ("2", "EXPLAIN SELECT 1 FROM customers"),
+        ("3", "CREATE INDEX i ON hc_test.customers (a)"),
+        ("4", "  with c AS (SELECT 1 FROM customers) SELECT * FROM c;"),
+        ("5", "DELETE FROM customers WHERE id = $1"))]
+    out = affected_queries(_Conn(rows), "hc_test.customers", "app")
     assert [q["queryid"] for q in out] == ["4", "5"]

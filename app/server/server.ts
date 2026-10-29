@@ -55,6 +55,10 @@ createApp({
       runner,
       scheduleMinutes: Number(process.env.SCHEDULE_MINUTES ?? "60"),
       approvals,
+      llm: {
+        enabled: process.env.LLM_ENABLED?.trim().toLowerCase() !== "false",
+        endpoint: process.env.LLM_ENDPOINT ?? "databricks-claude-opus-5-5",
+      },
     });
     appkit.server.extend((app) => registerRoutes(app, handlers));
   },

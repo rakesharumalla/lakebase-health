@@ -9,13 +9,14 @@ from pathlib import Path
 from ..checkspec import load_checks
 from ..config import RAW_TABLES, EngineConfig, pii_masking_enabled
 from ..ddl import ensure_masks, ensure_schema
+from .. import querytexts
 from ..exclusions import load_exclusions
 from ..executors.api import API_CHECKS, ApiExecutor
 from ..executors.delta import DeltaExecutor
 from ..executors.postgres import PostgresExecutor
 from ..ingest import ingest_all
 from ..inventory import build_inventory
-from ..fixer.postcheck import run_postcheck
+from ..fixer.postcheck import run_postcheck, run_rewrite_postcheck
 from ..record import load_last_ok, persist, persist_regressions, resolve_rolled_back
 from ..runner import Runner
 
@@ -97,7 +98,8 @@ def run_engine(sql, w, cfg, connect=None, now=None, checks_dir=None, skip_ingest
     t = time.monotonic()
     excl = load_exclusions(checks_dir / "exclusions.yaml").with_query_users(service_roles(cfg, me))
     specs = load_checks(checks_dir, frozenset(API_CHECKS))
-    runner = Runner(DeltaExecutor(sql, cfg, excl), PostgresExecutor(w, me, connect), ApiExecutor(excl), excl)
+    pg = PostgresExecutor(w, me, connect)
+    runner = Runner(DeltaExecutor(sql, cfg, excl), pg, ApiExecutor(excl), excl)
     outcomes = runner.run(specs, inventory, now, load_last_ok(sql, cfg), stale)
     errors += [f"check {o.check_id} {o.scope}: {o.error}" for o in outcomes if o.status in ("error", "timeout")]
     steps["checks"] = time.monotonic() - t
@@ -105,6 +107,16 @@ def run_engine(sql, w, cfg, connect=None, now=None, checks_dir=None, skip_ingest
     t = time.monotonic()
     counts = persist(sql, cfg, run["run_id"], now, outcomes, {s.id: s for s in specs}, inventory, branches)
     steps["record"] = time.monotonic() - t
+
+    t = time.monotonic()
+    try:  # normalized pg_stat_statements text for the app: system.lakebase masks it for the engine SP
+        texts, read, text_errors = querytexts.collect(pg, inventory, now)
+        querytexts.store(sql, cfg, texts, read, now)
+        counts["query_texts"] = len(texts)
+        errors += text_errors
+    except Exception as e:
+        errors.append(f"query_texts: {type(e).__name__}: {e}"[:1000])
+    steps["query_texts"] = time.monotonic() - t
 
     t = time.monotonic()
     try:
@@ -121,6 +133,10 @@ def run_engine(sql, w, cfg, connect=None, now=None, checks_dir=None, skip_ingest
         counts["fixes_rolled_back"] = resolve_rolled_back(sql, cfg, now)
     except Exception as e:
         errors.append(f"rolled back fixes: {type(e).__name__}: {e}")
+    try:
+        counts["rewrites_adopted"] = sum(r["outcome"] == "adopted" for r in run_rewrite_postcheck(sql, cfg, now, errors))
+    except Exception as e:
+        errors.append(f"rewrite postcheck: {type(e).__name__}: {e}")
     steps["postcheck"] = time.monotonic() - t
 
     run.update(ended_at=now if injected_now else datetime.now(timezone.utc),

@@ -4,6 +4,7 @@ SELECT a.action_id, a.fingerprint, a.check_id, a.kind, a.risk, a.reversible, a.v
 FROM {catalog}.lakebase_health.proposed_actions a
 JOIN {catalog}.lakebase_health.findings f ON f.fingerprint = a.fingerprint
 WHERE f.project_id = :project_id AND array_contains(split(:project_ids, ','), f.project_id)
+  AND coalesce(a.origin, 'check') = 'check'
   AND (:state = '' OR a.state = :state)
 QUALIFY row_number() OVER (
   PARTITION BY a.state

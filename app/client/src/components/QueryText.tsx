@@ -2,7 +2,7 @@ import { Button, Popover, PopoverContent, PopoverTrigger } from "@databricks/app
 import { Link } from "react-router";
 import type { GroupRow, Issue, QueryLabel } from "../lib/findings";
 import { cn } from "../lib/utils";
-import { severityTone, TONE_CLASSES } from "./tone";
+import { SEVERITY_CLASSES, SEVERITY_MARK, severityTone } from "./tone";
 import { CodeBlock } from "./ui";
 
 const NOTES: Partial<Record<QueryLabel["kind"], string>> = {
@@ -48,23 +48,31 @@ export function QueryText({ queryid, label, className }: { queryid: string; labe
   );
 }
 
-/** One severity-toned badge per check on a grouped query row, each linking to that check's finding. */
+/**
+ * One badge per check on a grouped query row, each linking to that check's finding, in its finding's
+ * severity scheme (solid critical/warning, outlined info). The mark (square for critical) and the title
+ * carry the severity too, so it is not colour alone.
+ */
 export function IssueBadges({ issues, className }: { issues: Issue[]; className?: string }) {
   return (
     <span className={cn("flex flex-wrap gap-1", className)}>
-      {issues.map((i) => (
-        <Link
-          key={i.fingerprint}
-          to={`/findings/${i.fingerprint}`}
-          title={`${i.title} (${i.severity})`}
-          className={cn(
-            "inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium whitespace-nowrap transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-ring",
-            TONE_CLASSES[severityTone(i.severity)],
-          )}
-        >
-          {i.label}
-        </Link>
-      ))}
+      {issues.map((i) => {
+        const tone = severityTone(i.severity);
+        return (
+          <Link
+            key={i.fingerprint}
+            to={`/findings/${i.fingerprint}`}
+            title={`${i.title} (${i.severity})`}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap transition-colors hover:underline focus-visible:outline-2 focus-visible:outline-ring",
+              SEVERITY_CLASSES[tone],
+            )}
+          >
+            <span aria-hidden className={cn(SEVERITY_MARK[tone], "size-1.5")} />
+            {i.label}
+          </Link>
+        );
+      })}
     </span>
   );
 }

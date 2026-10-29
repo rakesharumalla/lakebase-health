@@ -192,3 +192,13 @@ def test_no_judged_writes_passes_and_says_why():
     dele = "DELETE FROM orders WHERE id % 10 = 0"
     rule = _rule(_judge_writes({"d": W(10.0, dele)}, {"d": W(30.0, dele)}), "write_cost")
     assert rule["passed"] and "no judged write" in rule["detail"]
+
+
+def test_a_rewrite_is_timed_read_only_under_its_own_statement_timeout():
+    """Final review I-4: the rewrite's timing ran in a plain BEGIN, so nothing at the database kept it read-only."""
+    conn = _Conn()
+    measure(conn, "select 1", [[]], repeats=1, read_only=True, timeout_ms=7000)
+    assert conn.log[:2] == ["BEGIN READ ONLY", "SET LOCAL statement_timeout = '7000ms'"]
+    plain = _Conn()
+    measure(plain, "select 1", [[]], repeats=1)
+    assert plain.log[0] == "BEGIN" and not any("statement_timeout" in s for s in plain.log)
