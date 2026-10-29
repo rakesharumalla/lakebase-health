@@ -13,3 +13,9 @@ settings_regex: '^(databricks|neon|neon_monitor|compute_ctl|lakebase)\.|^neon_'
 query_users: [cloud_admin, databricks_control_plane, databricks_monitor]
 query_user_regex: '^databricks_writer_[0-9]+$'
 query_apps: [lakebase-health, lakebase-health-fixer]   # application_name the engine and fixer connect with
+# Monitoring tools' own queries often run under a person's login, so the role filters above miss them. Query-scoped
+# checks also drop queries whose application_name is a known tool, or whose text starts with a tag comment
+# /* <tag> */ (the engine, fixer and notebook prefix every statement with /* lakebase-health */). A tag anywhere
+# else in the text (a later comment, a string literal) does not count.
+tool_apps: [pg_sage, lakebase-health-notebook]
+tool_tags: [pg_sage, lakebase-health]

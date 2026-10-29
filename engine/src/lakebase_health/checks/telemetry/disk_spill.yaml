@@ -1,6 +1,7 @@
 id: disk_spill
 title: "Query spills sorts or hashes to disk"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 0, critical: 100}

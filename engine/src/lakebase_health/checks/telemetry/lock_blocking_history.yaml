@@ -1,6 +1,7 @@
 id: lock_blocking_history
 title: "Sessions were blocked by other sessions"
 category: incidents
+area: locks
 source: delta
 superseded_by:   # a live blocked session is the same blocking, with the blocker pid to act on
   key: endpoint

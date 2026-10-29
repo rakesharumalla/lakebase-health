@@ -1,6 +1,7 @@
 id: backup_restore_window
 title: "Point-in-time restore window is short"
 category: backup
+area: resilience
 source: api
 function: backup_restore_window
 direction: below

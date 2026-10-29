@@ -46,9 +46,12 @@ describe("read-only SQL", () => {
 });
 
 describe("app writes", () => {
-  it("server/writes holds only the approval insert", () => {
-    const files = readdirSync(join(root, "server", "writes"));
-    expect(files).toEqual(["insert_approval.sql"]);
+  it("server/writes holds only the approval and audit inserts", () => {
+    const files = readdirSync(join(root, "server", "writes")).sort();
+    expect(files).toEqual(["insert_approval.sql", "insert_audit.sql"]);
+    const audit = body(join(root, "server", "writes", "insert_audit.sql"));
+    expect(audit).toMatch(/^INSERT INTO \{catalog\}\.lakebase_health\.audit_events\s*\(/);
+    expect(audit).not.toMatch(/\b(UPDATE|DELETE|MERGE|CREATE|DROP|ALTER|TRUNCATE|GRANT|SELECT)\b/i);
     const sql = body(join(root, "server", "writes", "insert_approval.sql"));
     expect(sql).toMatch(/^INSERT INTO \{catalog\}\.lakebase_health\.approvals\s*\(/);
     expect(sql.split(";").filter((s) => s.trim()).length).toBe(1);

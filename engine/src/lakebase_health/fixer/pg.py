@@ -1,7 +1,7 @@
 import re
 from contextlib import contextmanager
 
-from ..executors.postgres import SEARCH_PATH_SQL
+from ..executors.postgres import SEARCH_PATH_SQL, tagged
 from .allowlist import IDENT, parse
 
 LONG = {"create_index", "drop_index"}
@@ -26,6 +26,24 @@ class CredentialDenied(Exception):
     sqlstate = CREDENTIAL_DENIED
 
 
+class TaggedConn:
+    """The fixer's connection: every statement leads with the /* lakebase-health */ tag (executors.postgres)."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=None):
+        return self.conn.execute(tagged(sql)) if params is None else self.conn.execute(tagged(sql), params)
+
+    def close(self):
+        self.conn.close()
+
+    def __getattr__(self, name):
+        # everything else (adapters, connection, pgconn, info ...) is the wrapped connection's: psycopg's
+        # Literal(v).as_string(conn) in verify.measure and the draft verify needs them
+        return getattr(self.conn, name)
+
+
 class FixerPg:
     def __init__(self, w, user: str, connect=None):
         self.w, self.user = w, user
@@ -47,7 +65,7 @@ class FixerPg:
         try:
             for stmt in FIXER_SETUP(kind):
                 conn.execute(stmt)
-            yield conn
+            yield TaggedConn(conn)
         finally:
             conn.close()
 

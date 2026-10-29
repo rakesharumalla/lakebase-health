@@ -1,6 +1,7 @@
 id: stale_statistics
 title: "Table statistics are missing or stale"
 category: performance
+area: vacuum_xid
 source: postgres
 thresholds: {warning: 20, critical: 100}
 explain: >

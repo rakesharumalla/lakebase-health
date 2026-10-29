@@ -33,12 +33,12 @@ Collected 2026-10-29. Ordered by impact within each section. "Spec" marks items 
 | Scale-to-zero | Suspended endpoints skipped | Show "last checked while awake"; never imply health from stale data |
 | Many databases per endpoint | Instance-wide checks fixed | Cap per-database work; let the user choose databases |
 | Read replicas | Lag and some checks | Label findings by endpoint role; replica-only problems (hot standby feedback holding back vacuum) |
-| Synced tables (`__db_system` partitions) | In the report spec | High priority: avoid misleading drop-index advice |
+| Synced tables (`__db_system` partitions) | Done (`synced.py`, `synced_index_review`) | Indexes on synced storage are reviewed, never dropped |
 | Very large fleets (1,000+ endpoints) | Ingest 20–30 min | Incremental ingest per table, parallel Postgres executor, per-run time budget, paging in the app |
 | Several workspaces or regions | One bundle per workspace | Document; later a central cross-workspace fleet view |
 | Private Link / IP access lists | Untested | Document serverless-to-endpoint egress requirements |
 | Azure and GCP | AWS only | Test, especially `system.lakebase` availability |
-| Customer connection pools | Not visible | `suspend_blockers` check (report spec) |
+| Customer connection pools | `suspend_blockers` check | Done; extend to pools that never go idle (min idle > 0 with traffic) |
 | Postgres versions | PG 17 only | Version-gate catalog queries (16/17/18 column changes) |
 
 ## 3. Edge cases

@@ -1,6 +1,7 @@
 id: lfc_hit_rate
 title: "Local SSD cache hit rate below 99%"
 category: capacity
+area: cache_memory
 source: delta
 direction: below
 thresholds: {warning: 99, critical: 95}

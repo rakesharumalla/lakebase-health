@@ -25,7 +25,7 @@ def test_columns_added_later_are_added_to_existing_tables_once():
     ensure_schema(sql, CFG)
     assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.findings ADD COLUMNS \(rollback_note STRING\)$")
     assert sql.ran(r"^ALTER TABLE cat\.lakebase_health\.proposed_actions ADD COLUMNS \(rollback_note STRING\)$")
-    current = [{"col_name": c} for c in ("fingerprint", "rollback_sql", "rollback_note", "origin", "draft_id")]
+    current = [{"col_name": c} for c in ("fingerprint", "rollback_sql", "rollback_note", "origin", "draft_id", "relid")]
     sql = FakeSql(responses=[(r"SHOW COLUMNS IN", current)])
     ensure_schema(sql, CFG)
     assert not sql.ran(r"ADD COLUMNS")

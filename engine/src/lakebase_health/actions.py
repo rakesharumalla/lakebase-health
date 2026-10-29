@@ -1,8 +1,10 @@
 import hashlib
+import json
 from datetime import timedelta
 
 from .fixer.allowlist import runnable
 from .models import Action
+from .synced import drops_synced_index
 
 ACTION_TTL = timedelta(days=7)
 FIXER_STATES = {"verifying", "verified", "verify_failed", "applying", "applied", "apply_failed", "regressed",
@@ -25,6 +27,14 @@ def policy_level(risk: str, reversible: bool, verify_on_branch: bool) -> str:
     if risk == "safe" and not verify_on_branch:
         return "L3"
     return "L2"
+
+
+def _evidence(f) -> dict:
+    try:
+        e = json.loads(f.evidence) if isinstance(f.evidence, str) and f.evidence else f.evidence
+    except ValueError:
+        return {}
+    return e if isinstance(e, dict) else {}
 
 
 def _action_id(fingerprint: str, sql: str) -> str:
@@ -68,7 +78,9 @@ def plan_actions(findings: list, existing: dict, specs: dict, now, gone=frozense
         fix = spec.fix if spec else None
         wanted, reason = None, "branch_gone" if f.fingerprint in gone else "finding_resolved"
         if f.status in ("new", "open") and fix is not None and fix.actionable and f.candidate_sql:
-            if runnable_fix(f.candidate_sql, f.rollback_sql):
+            if drops_synced_index(_evidence(f), f.candidate_sql):
+                reason = "synced_partition"  # the sync owns these indexes; the finding keeps its SQL as advice
+            elif runnable_fix(f.candidate_sql, f.rollback_sql):
                 wanted = _action_id(f.fingerprint, f.candidate_sql)
             else:
                 reason = "not_runnable"  # outside the fixer allowlist: the app shows the SQL to apply by hand

@@ -1,0 +1,697 @@
+{
+  "auth_failures": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 50.0,
+      "warning": 5.0
+    },
+    "title": "Repeated authentication failures"
+  },
+  "autovacuum_blocker": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 30.0,
+      "warning": 10.0
+    },
+    "title": "Dead tuples pile up because something blocks vacuum"
+  },
+  "autovacuum_disabled": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Autovacuum disabled on a table"
+  },
+  "autovacuum_saturation": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "warning": 1.0
+    },
+    "title": "Every autovacuum worker busy while a table waits"
+  },
+  "autovacuum_scale_factor": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 30.0,
+      "warning": 10.0
+    },
+    "title": "Large table needs per-table autovacuum tuning"
+  },
+  "backup_restore_window": {
+    "area": "resilience",
+    "direction": "below",
+    "source": "api",
+    "thresholds": {
+      "critical": 3.0,
+      "warning": 7.0
+    },
+    "title": "Point-in-time restore window is short"
+  },
+  "blocked_session": {
+    "area": "locks",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 300.0,
+      "warning": 60.0
+    },
+    "title": "Session blocked by another session"
+  },
+  "buffer_hit_rate": {
+    "area": "cache_memory",
+    "direction": "below",
+    "source": "delta",
+    "thresholds": {
+      "info": 95.0,
+      "warning": 90.0
+    },
+    "title": "Postgres buffer cache hit rate low"
+  },
+  "commit_quorum_wait": {
+    "area": "write_path",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 5.0,
+      "warning": 2.0
+    },
+    "title": "Commits wait for the WAL storage quorum"
+  },
+  "config_drift": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "info": 0.0
+    },
+    "title": "Role or database setting override"
+  },
+  "connection_drops": {
+    "area": "connections",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 1000.0,
+      "info": 10.0,
+      "warning": 100.0
+    },
+    "title": "Client connections dropped (SSL EOF, resets)"
+  },
+  "connection_utilization": {
+    "area": "connections",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 85.0,
+      "warning": 70.0
+    },
+    "title": "Connections near the compute limit"
+  },
+  "cpu_saturation": {
+    "area": "cache_memory",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 85.0,
+      "warning": 70.0
+    },
+    "title": "CPU saturated (p95 over 24 h)"
+  },
+  "cu_sizing": {
+    "area": "cache_memory",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 1.0
+    },
+    "title": "Compute size does not match the workload"
+  },
+  "dead_tuples": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 20.0,
+      "warning": 10.0
+    },
+    "title": "High share of dead tuples"
+  },
+  "deadlocks": {
+    "area": "locks",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 2.0,
+      "warning": 0.0
+    },
+    "title": "Deadlocks detected"
+  },
+  "default_branch_unprotected": {
+    "area": "resilience",
+    "direction": "above",
+    "source": "api",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Default (production) branch is not protected"
+  },
+  "disk_spill": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 100.0,
+      "warning": 0.0
+    },
+    "title": "Query spills sorts or hashes to disk"
+  },
+  "duplicate_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1073741824.0,
+      "warning": 0.0
+    },
+    "title": "Duplicate index"
+  },
+  "getpage_latency_spike": {
+    "area": "storage_latency",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 2.0
+    },
+    "title": "Storage read latency spiked"
+  },
+  "gin_cleanup_lock_wait": {
+    "area": "locks",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 600.0,
+      "warning": 60.0
+    },
+    "title": "Writes wait for a GIN pending-list cleanup"
+  },
+  "gin_pending_list": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 90.0,
+      "info": 25.0,
+      "warning": 50.0
+    },
+    "title": "GIN index pending list near its limit"
+  },
+  "guardrail_settings": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 1.0
+    },
+    "title": "Guardrail setting missing or too loose"
+  },
+  "hot_row_lock": {
+    "area": "locks",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 10.0,
+      "warning": 3.0
+    },
+    "title": "Writes wait on a row lock"
+  },
+  "idle_in_transaction": {
+    "area": "connections",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 300.0,
+      "warning": 60.0
+    },
+    "title": "Session idle inside an open transaction"
+  },
+  "idle_in_tx_time": {
+    "area": "connections",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 20.0,
+      "warning": 5.0
+    },
+    "title": "Sessions spend a lot of time idle in transaction"
+  },
+  "index_bloat": {
+    "area": "tables_bloat",
+    "direction": "below",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 50.0,
+      "warning": 70.0
+    },
+    "title": "B-tree index bloat"
+  },
+  "invalid_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Invalid index left by a failed build"
+  },
+  "lfc_hit_rate": {
+    "area": "cache_memory",
+    "direction": "below",
+    "source": "delta",
+    "thresholds": {
+      "critical": 95.0,
+      "warning": 99.0
+    },
+    "title": "Local SSD cache hit rate below 99%"
+  },
+  "lock_blocking_history": {
+    "area": "locks",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 300.0,
+      "warning": 60.0
+    },
+    "title": "Sessions were blocked by other sessions"
+  },
+  "lock_wait_share": {
+    "area": "locks",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 25.0,
+      "warning": 10.0
+    },
+    "title": "Lock waits are a large share of wait time"
+  },
+  "long_transaction": {
+    "area": "connections",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1800.0,
+      "warning": 300.0
+    },
+    "title": "Long-running transaction"
+  },
+  "missing_fk_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1073741824.0,
+      "warning": 0.0
+    },
+    "title": "Foreign key without a supporting index"
+  },
+  "non_ssl_sessions": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 10.0,
+      "warning": 0.0
+    },
+    "title": "Client sessions without SSL"
+  },
+  "oversized_search_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 10737418240.0,
+      "warning": 1073741824.0
+    },
+    "title": "Large GIN/GiST search index"
+  },
+  "password_roles": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "api",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Role uses a native Postgres password"
+  },
+  "plan_flip": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 10.0,
+      "warning": 2.0
+    },
+    "title": "Query switches between fast and slow plans"
+  },
+  "postgres_errors": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 10.0,
+      "warning": 0.0
+    },
+    "title": "Infrastructure-level Postgres errors"
+  },
+  "prepared_transaction": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 86400.0,
+      "warning": 3600.0
+    },
+    "title": "Forgotten prepared transaction"
+  },
+  "primary_without_ha": {
+    "area": "resilience",
+    "direction": "above",
+    "source": "api",
+    "thresholds": {
+      "info": 0.0
+    },
+    "title": "Primary compute has no high-availability secondary"
+  },
+  "privileged_roles": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 1.0
+    },
+    "title": "Login role with powerful attributes"
+  },
+  "public_schema_create": {
+    "area": "config_security",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Any role can create objects in a schema"
+  },
+  "query_regression": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 2.0,
+      "warning": 1.5
+    },
+    "title": "Query got slower than its baseline"
+  },
+  "redundant_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1073741824.0,
+      "warning": 0.0
+    },
+    "title": "Index covered by a wider index"
+  },
+  "replica_lag": {
+    "area": "resilience",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 30.0,
+      "warning": 1.0
+    },
+    "title": "Read replica lags behind the primary"
+  },
+  "replication_slot_retention": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1073741824.0,
+      "warning": 0.0
+    },
+    "title": "Inactive replication slot retains WAL"
+  },
+  "rollback_ratio": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 5.0,
+      "warning": 1.0
+    },
+    "title": "High transaction rollback ratio"
+  },
+  "row_misestimate": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 50.0,
+      "info": 0.0,
+      "warning": 10.0
+    },
+    "title": "Planner row estimates are far off"
+  },
+  "seq_scan_heavy": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1000000.0,
+      "warning": 10000.0
+    },
+    "title": "Table read mostly by large sequential scans"
+  },
+  "seq_scan_read_ratio": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 100.0,
+      "warning": 10.0
+    },
+    "title": "Database reads far more rows than it uses"
+  },
+  "sequence_exhaustion": {
+    "area": "tables_bloat",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 75.0,
+      "warning": 50.0
+    },
+    "title": "Sequence or identity column nearing its limit"
+  },
+  "sort_limit_waste": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 1000.0,
+      "warning": 10.0
+    },
+    "title": "Sort reads far more rows than the LIMIT returns"
+  },
+  "stale_statistics": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 100.0,
+      "warning": 20.0
+    },
+    "title": "Table statistics are missing or stale"
+  },
+  "statement_timeouts": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 100.0,
+      "info": 1.0,
+      "warning": 10.0
+    },
+    "title": "Statements cancelled by statement_timeout"
+  },
+  "storage_runway": {
+    "area": "resilience",
+    "direction": "below",
+    "source": "delta",
+    "thresholds": {
+      "critical": 30.0,
+      "warning": 90.0
+    },
+    "title": "Storage projected to fill soon"
+  },
+  "storage_utilization": {
+    "area": "resilience",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 85.0,
+      "warning": 70.0
+    },
+    "title": "Storage near its limit"
+  },
+  "storage_wait": {
+    "area": "storage_latency",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 30.0,
+      "warning": 10.0
+    },
+    "title": "Query waits on remote storage"
+  },
+  "suspend_blockers": {
+    "area": "scale_to_zero",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "warning": 0.0
+    },
+    "title": "Idle clients keep the compute from scaling to zero"
+  },
+  "synced_full_refresh": {
+    "area": "write_path",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 1.0
+    },
+    "title": "Synced table fully refreshed"
+  },
+  "synced_index_review": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "info": 0.0
+    },
+    "title": "Index on a synced table to review"
+  },
+  "table_bloat": {
+    "area": "tables_bloat",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 40.0,
+      "warning": 20.0
+    },
+    "title": "Table bloat"
+  },
+  "table_without_pk": {
+    "area": "tables_bloat",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "info": -1.0,
+      "warning": 104857600.0
+    },
+    "title": "Table without a primary key"
+  },
+  "top_db_time_query": {
+    "area": "queries",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 50.0,
+      "warning": 25.0
+    },
+    "title": "One query dominates database time"
+  },
+  "unused_index": {
+    "area": "indexes",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1073741824.0,
+      "info": 0.0,
+      "warning": 104857600.0
+    },
+    "title": "Index never used"
+  },
+  "wal_burst": {
+    "area": "write_path",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "info": 0.0,
+      "warning": 3.0
+    },
+    "title": "Bursts of WAL far above the usual rate"
+  },
+  "working_set_vs_cache": {
+    "area": "cache_memory",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 100.0,
+      "warning": 80.0
+    },
+    "title": "Working set larger than the compute cache"
+  },
+  "write_backpressure": {
+    "area": "write_path",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 600.0,
+      "warning": 0.0
+    },
+    "title": "Storage throttled writes"
+  },
+  "xid_age_table": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 1000000000.0,
+      "warning": 200000000.0
+    },
+    "title": "Table with old unfrozen transaction IDs"
+  },
+  "xid_runway": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "delta",
+    "thresholds": {
+      "critical": 1000000000.0,
+      "warning": 200000000.0
+    },
+    "title": "Transaction ID age is high"
+  },
+  "xmin_horizon_holder": {
+    "area": "vacuum_xid",
+    "direction": "above",
+    "source": "postgres",
+    "thresholds": {
+      "critical": 200000000.0,
+      "warning": 50000000.0
+    },
+    "title": "Session holds back vacuum and freezing"
+  }
+}

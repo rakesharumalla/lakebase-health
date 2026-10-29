@@ -259,3 +259,45 @@ def test_a_replica_suspended_since_the_inventory_is_unverified_not_woken():
     pg = PerEndpointPg({"e": [{"object": "i", "measure": 1}]}, suspended=("r1",))
     [o] = runner(pg=pg).run([s], [ep(), ep(endpoint_id="r1", endpoint_type=RO)], NOW, {}, set())
     assert pg.opened == ["e"] and o.results[0].evidence["replicas_unverified"] == ["r1"]
+
+
+def test_counter_checks_do_not_run_on_young_statistics():
+    young = spec("u", min_stats_hours=24, thresholds={"info": 0})
+    plain = spec("p", thresholds={"info": 0})
+    sess = FakeSession([{"object": "s.i", "measure": 5.0}], window=3.4)
+    out = {o.check_id: o for o in runner(pg=FakePg(sess)).run([young, plain], [ep()], NOW, {}, set())}
+    assert out["u"].status == "skipped:stats_young" and out["u"].results == []
+    assert out["u"].error == "counters too young (reset 3 h ago)"
+    assert out["p"].status == "ok" and len(out["p"].results) == 1
+
+
+def test_counter_checks_run_once_statistics_are_old_enough_and_unknown_age_skips():
+    s = spec("u", min_stats_hours=24, thresholds={"info": 0})
+    [o] = runner(pg=FakePg(FakeSession([{"object": "s.i", "measure": 5.0}], window=30.0))).run([s], [ep()], NOW, {}, set())
+    assert o.status == "ok" and len(o.results) == 1
+    [o] = runner(pg=FakePg(FakeSession([{"object": "s.i", "measure": 5.0}], window=None))).run([s], [ep()], NOW, {}, set())
+    assert o.status == "skipped:stats_young" and o.error == "counters too young (reset time unknown)"
+
+
+def test_one_young_database_skips_the_endpoint():
+    class TwoDbs(FakeSession):
+        def __init__(self):
+            super().__init__([{"object": "s.i", "measure": 5.0}])
+            self.windows = iter([48.0, 2.0])
+
+        def stats_window_hours(self):
+            return next(self.windows)
+
+    s = spec("u", min_stats_hours=24, thresholds={"info": 0})
+    [o] = runner(pg=FakePg(TwoDbs())).run([s], [ep(databases=["a", "b"])], NOW, {}, set())
+    assert o.status == "skipped:stats_young" and o.results == []
+
+
+def test_min_stats_hours_is_validated():
+    import pytest
+    from lakebase_health.checkspec import CheckSpecError
+    for bad in (0, -1, "24", True):
+        with pytest.raises(CheckSpecError, match="min_stats_hours"):
+            spec("u", min_stats_hours=bad)
+    with pytest.raises(CheckSpecError, match="min_stats_hours"):
+        spec("d", "delta", min_stats_hours=24)

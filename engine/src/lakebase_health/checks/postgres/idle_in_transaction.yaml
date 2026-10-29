@@ -1,6 +1,7 @@
 id: idle_in_transaction
 title: "Session idle inside an open transaction"
 category: incidents
+area: connections
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 60, critical: 300}

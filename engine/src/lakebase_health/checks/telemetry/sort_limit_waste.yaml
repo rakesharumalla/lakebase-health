@@ -1,6 +1,7 @@
 id: sort_limit_waste
 title: "Sort reads far more rows than the LIMIT returns"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 10, critical: 1000}

@@ -1,6 +1,7 @@
 id: hot_row_lock
 title: "Writes wait on a row lock"
 category: incidents
+area: locks
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 3, critical: 10}

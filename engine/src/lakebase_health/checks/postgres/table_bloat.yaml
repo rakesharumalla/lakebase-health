@@ -1,6 +1,7 @@
 id: table_bloat
 title: "Table bloat"
 category: maintenance
+area: tables_bloat
 source: postgres
 schedule: daily
 requires_extension: pgstattuple

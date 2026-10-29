@@ -108,9 +108,9 @@ sequential scans, and reported the LFC hit rate as 0.0 %.
 
 | Gap | Seen in | Status |
 |---|---|---|
-| Health score, tabbed project page, inventory panels, HTML / CSV export | Health Check app | Report spec (tabbed project page), next after the LLM rewrites deploy |
-| Synced-table awareness, WAL bursts, getpage spikes, scale-to-zero blockers, autovacuum saturation, stats-reset guard | Health Check app | Same spec (six new checks) |
-| `pg_stat_io` panel | Health Check app | Same spec (System tab, `inventory_io`) |
+| Health score, tabbed project page, inventory panels, HTML / CSV export | Health Check app | Done on `feature/health-report`: score and grade, 11-tab project page, inventory panels, self-contained HTML download (CSV not planned) |
+| Synced-table awareness, WAL bursts, getpage spikes, scale-to-zero blockers, autovacuum saturation, stats-reset guard | Health Check app | Done (six new checks, synced helper, stats-reset guard) |
+| `pg_stat_io` panel | Health Check app | Done (System tab, `inventory_io`) |
 | High-resolution capture during an incident (monitor mode) | Health Check app | Partly covered by 7-day telemetry; per-second capture not planned |
 | Unattended apply (trust level 3) | pg_sage | Shadow-scored only; needs a track record (`docs/FOLLOW_UPS.md`) |
 | Alerts (Slack / email) | pg_sage | `docs/FOLLOW_UPS.md` |

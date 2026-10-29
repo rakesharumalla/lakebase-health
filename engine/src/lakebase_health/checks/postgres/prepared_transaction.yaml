@@ -1,6 +1,7 @@
 id: prepared_transaction
 title: "Forgotten prepared transaction"
 category: maintenance
+area: vacuum_xid
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 3600, critical: 86400}

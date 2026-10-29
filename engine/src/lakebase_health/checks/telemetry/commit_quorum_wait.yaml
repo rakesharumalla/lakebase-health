@@ -1,6 +1,7 @@
 id: commit_quorum_wait
 title: "Commits wait for the WAL storage quorum"
 category: incidents
+area: write_path
 source: delta
 thresholds: {warning: 2, critical: 5}
 explain: >

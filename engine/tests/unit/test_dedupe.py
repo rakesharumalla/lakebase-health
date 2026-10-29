@@ -9,12 +9,14 @@ from lakebase_health.checkspec import CheckSpecError, load_checks
 from lakebase_health.executors.api import API_CHECKS
 from lakebase_health.lifecycle import apply_run
 from lakebase_health.models import CheckOutcome
+from lakebase_health.synced import SYNCED_MAP_SQL
 from tests.unit.test_executors import ep
 from tests.unit.test_runner import NOW, FakePg, FakeSession, runner, spec
 
 CHECKS_DIR = Path(__file__).resolve().parents[2] / "src" / "lakebase_health" / "checks"
 INSTANCE_WIDE = {"privileged_roles", "config_drift", "long_transaction", "idle_in_transaction", "blocked_session",
-                 "prepared_transaction", "replication_slot_retention", "xmin_horizon_holder", "non_ssl_sessions"}
+                 "prepared_transaction", "replication_slot_retention", "xmin_horizon_holder", "non_ssl_sessions",
+                 "suspend_blockers"}
 
 
 def packaged():
@@ -27,7 +29,8 @@ class CountingSession(FakeSession):
         self.calls = 0
 
     def query(self, sql):
-        self.calls += 1
+        if sql != SYNCED_MAP_SQL:  # the runner's synced-table lookup, once per database session
+            self.calls += 1
         return super().query(sql)
 
 
@@ -117,7 +120,7 @@ def test_engine_application_names_are_excluded_but_customer_apps_are_not():
     pred = PKG_EXCL.platform_app_sql("application_name")
     assert _sqlite_true(pred, application_name="lakebase-health")
     assert _sqlite_true(pred, application_name="lakebase-health-fixer")
-    for app in ("psql", "lakebase-health-notebook", "whats-new-studio", None):
+    for app in ("psql", "lakebase-health-notebook", "whats-new-studio", None):  # the notebook is a tool: tool_app_sql
         assert not _sqlite_true(pred, application_name=app)
 
 

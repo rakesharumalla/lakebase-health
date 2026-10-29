@@ -1,0 +1,49 @@
+id: wal_burst
+title: "Bursts of WAL far above the usual rate"
+category: throughput
+area: write_path
+source: delta
+thresholds: {info: 0, warning: 3}
+explain: >
+  5-minute windows in the last 24 h whose WAL volume was more than 10 times the endpoint's median 5-minute volume
+  and more than 1 GiB (measure = number of bursts; a warning above 3 a day). WAL comes from the statements that
+  wrote it (pg_stat_statements_counters wal_bytes and full-page images), counting every role: WAL volume is a
+  property of the endpoint, and the synced-table pipeline (databricks_writer_n) is often its largest writer. So
+  top_wal_queryid and top_wal_role name the COPY, bulk load, index build or sync behind the worst burst; a sync
+  writer is labelled "synced-table pipeline (databricks_writer_n)" in top_wal_source. Bursts throttle writes and slow replicas: batch bulk loads, build
+  indexes off-peak and avoid rewriting whole tables.
+sql: |
+  WITH b AS (
+    SELECT project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+           sum(wal_bytes) AS wal_bytes, sum(wal_fpi) AS wal_fpi
+    FROM system.lakebase.pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+    GROUP BY project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+  m AS (SELECT endpoint_id, percentile_approx(wal_bytes, 0.5) AS median_bytes FROM b GROUP BY endpoint_id),
+  bursts AS (
+    SELECT b.*, m.median_bytes FROM b JOIN m ON m.endpoint_id = b.endpoint_id
+    WHERE b.wal_bytes > 10 * m.median_bytes AND b.wal_bytes > 1073741824),
+  roles AS (  -- role names by OID, as plan_history recorded them on the branch
+    SELECT branch_id, userid, max(usename) AS usename FROM system.lakebase.plan_history
+    WHERE ts >= current_timestamp() - INTERVAL 8 DAYS GROUP BY branch_id, userid),
+  top AS (
+    SELECT s.endpoint_id, timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300) AS bucket,
+           max_by(CAST(s.queryid AS STRING), s.wal_bytes) AS top_queryid,
+           max_by(coalesce(r.usename, CONCAT('userid ', CAST(s.userid AS STRING))), s.wal_bytes) AS top_role
+    FROM system.lakebase.pg_stat_statements_counters s
+    JOIN bursts x ON x.endpoint_id = s.endpoint_id
+      AND x.bucket = timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300)
+    LEFT JOIN roles r ON r.branch_id = s.branch_id AND r.userid = s.userid
+    WHERE s.ts >= current_timestamp() - INTERVAL 24 HOURS
+    GROUP BY s.endpoint_id, timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300))
+  SELECT x.project_id, x.branch_id, x.endpoint_id, x.endpoint_id AS object, CAST(count(*) AS DOUBLE) AS measure,
+         max(x.wal_bytes) AS max_burst_bytes, max_by(x.wal_fpi, x.wal_bytes) AS max_burst_fpi,
+         max(x.median_bytes) AS median_bytes, max_by(x.bucket, x.wal_bytes) AS worst_at,
+         max_by(t.top_queryid, x.wal_bytes) AS top_wal_queryid,
+         max_by(t.top_role, x.wal_bytes) AS top_wal_role,
+         coalesce(CASE WHEN max_by(t.top_role, x.wal_bytes) RLIKE '^databricks_writer_[0-9]+$'
+              THEN CONCAT('synced-table pipeline (', max_by(t.top_role, x.wal_bytes), ')')
+              ELSE CONCAT('statement ', max_by(t.top_queryid, x.wal_bytes), ' as ', max_by(t.top_role, x.wal_bytes))
+         END, 'an unidentified statement') AS top_wal_source
+  FROM bursts x LEFT JOIN top t ON t.endpoint_id = x.endpoint_id AND t.bucket = x.bucket
+  GROUP BY x.project_id, x.branch_id, x.endpoint_id
+fix: {kind: manual, template: "Find the largest WAL writer at the worst burst, {top_wal_source}: batch it, run it off-peak, or build indexes after the load; for a synced-table pipeline, prefer triggered or continuous sync to full refreshes.", risk: moderate}

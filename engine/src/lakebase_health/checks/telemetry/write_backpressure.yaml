@@ -1,6 +1,7 @@
 id: write_backpressure
 title: "Storage throttled writes"
 category: capacity
+area: write_path
 source: delta
 thresholds: {warning: 0, critical: 600}
 explain: >

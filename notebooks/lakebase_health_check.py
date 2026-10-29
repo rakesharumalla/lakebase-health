@@ -2,7 +2,7 @@
 # MAGIC %md
 # MAGIC # Lakebase Health Check
 # MAGIC
-# MAGIC Every check the Lakebase Health engine runs (31 telemetry, 29 Postgres, 4 API), with the SQL the engine runs. If you are not enrolled in
+# MAGIC Every check the Lakebase Health engine runs (35 telemetry, 31 Postgres, 4 API), with the SQL the engine runs. If you are not enrolled in
 # MAGIC the engine you can run the checks here; the last section shows the engine's open findings.
 # MAGIC
 # MAGIC **Generated** by `scripts/build_notebook.py` from the check YAMLs in `engine/src/lakebase_health/checks`. Edit the
@@ -57,6 +57,7 @@ SERVICE_ROLES = ('00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-800
 EXCLUDED_ROLES = ('cloud_admin', 'databricks_control_plane', 'databricks_superuser', 'databricks_monitor', 'authenticator')
 SESSION_SETUP = ('DO $$ BEGIN PERFORM set_config(\'search_path\', concat_ws(\',\', \'"$user"\', \'public\', (SELECT string_agg(DISTINCT quote_ident(n.nspname), \',\') FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE n.nspname NOT IN (\'public\', \'pg_catalog\'))), false); END $$', 'SET default_transaction_read_only = on', "SET statement_timeout = '30s'", "SET lock_timeout = '1s'")
 STATS_WINDOW_SQL = 'SELECT extract(epoch FROM now() - coalesce((SELECT stats_reset FROM pg_stat_database WHERE datname = current_database()), pg_postmaster_start_time()))::float8 / 3600.0 AS h'
+QUERY_TAG = '/* lakebase-health */ '
 
 w = WorkspaceClient()
 USER = w.current_user.me().user_name
@@ -161,7 +162,15 @@ def _pg_endpoint():
 def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, requires_extension=None, guards=()):
     """A Postgres check, read-only, on the chosen endpoint; in every database when per_database."""
     ep = _pg_endpoint()
-    host = w.postgres.get_endpoint(name=ep.name).status.hosts.host
+    status = w.postgres.get_endpoint(name=ep.name).status
+    host = status.hosts.host
+    if "{suspend_timeout_s}" in sql:  # the engine fills in the endpoint's suspend timeout (suspend_blockers)
+        t = getattr(status, "suspend_timeout_duration", None)
+        secs = int(t.total_seconds()) if hasattr(t, "total_seconds") else int(float(str(t or "0").rstrip("s")))
+        if secs <= 0:
+            print(f"{ep.name}: skipped, scale to zero is off")
+            return
+        sql = sql.replace("{suspend_timeout_s}", str(secs))
     branch = ep.name.split("/endpoints/")[0]
     dbs = [d.status.postgres_database for d in w.postgres.list_databases(parent=branch) if d.status]
     dbs = dbs if per_database else dbs[:1]
@@ -169,9 +178,10 @@ def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, req
     frames = []
     for db in dbs:
         token = w.postgres.generate_database_credential(endpoint=ep.name).token
-        # application_name as the engine's, so the query checks ignore this traffic like the engine's own
+        # The notebook's own application_name and the /* lakebase-health */ tag: the query checks ignore it
         with psycopg.connect(host=host, user=USER, password=token, dbname=db, sslmode="require", autocommit=True,
-                             application_name="lakebase-health", connect_timeout=10, prepare_threshold=None) as c:
+                             application_name="lakebase-health-notebook", connect_timeout=10,
+                             prepare_threshold=None) as c:
             for stmt in SESSION_SETUP:  # search_path, default_transaction_read_only = on, statement/lock timeouts
                 c.execute(stmt)
             if requires_extension and not c.execute(
@@ -181,7 +191,7 @@ def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, req
             if guards:
                 print(f"{db}: stats window {c.execute(STATS_WINDOW_SQL).fetchone()[0]} h (confidence is low unless "
                       f"{', '.join(guards)})")
-            cur = c.execute(sql)
+            cur = c.execute(QUERY_TAG + sql)
             pdf = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
         if per_database and "object" in pdf.columns:
             pdf["object"] = db + ":" + pdf["object"].astype(str)  # the engine's object naming
@@ -714,8 +724,8 @@ WITH waits AS (
               WHEN b.wait_event = 'SyncRep' THEN 'commit_wait'
               WHEN b.backend_state IN (3, 4) THEN 'idle_in_transaction'
               ELSE 'active' END AS blocker_class
-  FROM (SELECT t.* FROM {catalog}.{schema}.raw_active_session_history t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid) w
-  LEFT JOIN (SELECT t.* FROM {catalog}.{schema}.raw_active_session_history t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid) b
+  FROM (SELECT t.* FROM {catalog}.{schema}.raw_active_session_history t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND ((coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) UNION SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(query, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) tq ON t.branch_id = tq.branch_id AND t.userid = tq.userid AND t.queryid = tq.queryid) w
+  LEFT JOIN (SELECT t.* FROM {catalog}.{schema}.raw_active_session_history t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND ((coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) UNION SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(query, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) tq ON t.branch_id = tq.branch_id AND t.userid = tq.userid AND t.queryid = tq.queryid) b
     ON b.endpoint_id = w.endpoint_id AND b.ts = w.ts AND b.pid = w.blocking_pid
    AND b.ts >= current_timestamp() - INTERVAL 24 HOURS
   WHERE w.ts >= current_timestamp() - INTERVAL 24 HOURS AND w.wait_event_type = 'Lock'
@@ -884,7 +894,7 @@ run_delta(SQL, "statement_timeouts", measure="measure", thresholds={'info': 1.0,
 # MAGIC
 # MAGIC **Category:** indexing | **Severity:** critical if `measure` > 100; warning if `measure` > 10 | **Schedule:** every run
 # MAGIC
-# MAGIC rows_returned (rows read, dominated by sequential scans) divided by rows_fetched (rows from index scans) per database over 24 h. A high ratio means missing indexes; see seq_scan_heavy and top_db_time_query.
+# MAGIC rows_returned (rows read, dominated by sequential scans) divided by rows_fetched (rows from index scans) per database over 24 h. A high ratio means missing indexes; see seq_scan_heavy and top_db_time_query. Not reported for a database whose telemetry covers less than 20 of the 24 hours (a new or restarted compute).
 # MAGIC
 # MAGIC - **Candidate fix:** none
 # MAGIC - **Fixer can apply it:** no (no candidate fix)
@@ -900,6 +910,7 @@ SELECT project_id, branch_id, endpoint_id, endpoint_id || '/' || datname AS obje
 FROM {catalog}.{schema}.raw_database_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
 GROUP BY project_id, branch_id, endpoint_id, datname
 HAVING sum(rows_returned) > 1000000
+   AND min(ts) <= current_timestamp() - INTERVAL 20 HOURS  -- counters young: telemetry covers < 20 of the 24 h
 """
 run_delta(SQL, "seq_scan_read_ratio", measure="measure", thresholds={'warning': 10.0, 'critical': 100.0}, direction="above")
 
@@ -907,6 +918,64 @@ run_delta(SQL, "seq_scan_read_ratio", measure="measure", thresholds={'warning': 
 
 # MAGIC %md
 # MAGIC ### telemetry: maintenance
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### `autovacuum_saturation`: Every autovacuum worker busy while a table waits
+# MAGIC
+# MAGIC **Category:** maintenance | **Severity:** warning if `measure` > 1 | **Schedule:** every run
+# MAGIC
+# MAGIC All autovacuum workers were busy in the last 3 inventory snapshots (one per analysis run) while this table has stayed over its vacuum threshold (dead tuples > threshold + scale factor x rows) for more than an hour (measure = hours). Vacuum cannot keep up. Let the workers go faster on this table (per-table autovacuum_vacuum_cost_limit, the fix below), vacuum it by hand in a quiet period, or reduce dead tuples at the source (fewer UPDATEs of indexed columns, batched deletes). autovacuum_max_workers is support-managed.
+# MAGIC
+# MAGIC - **Candidate fix** (ddl, risk safe, reversible): `ALTER TABLE {table_ident} SET (autovacuum_vacuum_cost_limit = 2000);`
+# MAGIC - **Rollback:** `ALTER TABLE {table_ident} RESET (autovacuum_vacuum_cost_limit);`
+# MAGIC - **Fixer can apply it:** yes, after approval in the app (allowlisted as reloptions)
+
+# COMMAND ----------
+
+# check: autovacuum_saturation
+SQL = r"""
+WITH snap AS (
+  SELECT project_id, branch_id, endpoint_id, collected_at,
+         max(CASE WHEN metric = 'autovacuum_workers_busy' THEN value END) AS busy,
+         max(CASE WHEN metric = 'autovacuum_max_workers' THEN value END) AS max_workers
+  FROM {catalog}.{schema}.inventory_endpoint
+  WHERE collected_at >= current_timestamp() - INTERVAL 3 HOURS
+    AND metric IN ('autovacuum_workers_busy', 'autovacuum_max_workers')
+  GROUP BY project_id, branch_id, endpoint_id, collected_at),
+last3 AS (
+  SELECT * FROM snap QUALIFY row_number() OVER (PARTITION BY endpoint_id ORDER BY collected_at DESC) <= 3),
+saturated AS (
+  SELECT project_id, branch_id, endpoint_id, max(busy) AS busy_workers, max(max_workers) AS max_workers,
+         max(collected_at) AS latest
+  FROM last3 GROUP BY project_id, branch_id, endpoint_id
+  HAVING count(*) = 3 AND min(CASE WHEN busy >= max_workers AND max_workers > 0 THEN 1 ELSE 0 END) = 1),
+tbl AS (
+  SELECT endpoint_id, datname, schema_name, table_name, collected_at, n_dead_tup, vacuum_threshold,
+         n_dead_tup > vacuum_threshold AS over_threshold
+  FROM {catalog}.{schema}.inventory_tables WHERE collected_at >= current_timestamp() - INTERVAL 3 HOURS),
+runs AS (
+  SELECT endpoint_id, datname, schema_name, table_name, max(collected_at) AS last_at,
+         max(CASE WHEN NOT over_threshold THEN collected_at END) AS last_under,
+         max_by(over_threshold, collected_at) AS over_now, max_by(n_dead_tup, collected_at) AS n_dead_tup,
+         max_by(vacuum_threshold, collected_at) AS vacuum_threshold
+  FROM tbl GROUP BY endpoint_id, datname, schema_name, table_name),
+waiting AS (
+  SELECT r.endpoint_id, r.datname, r.schema_name, r.table_name, r.last_at, r.n_dead_tup, r.vacuum_threshold,
+         (unix_timestamp(r.last_at) - unix_timestamp(min(t.collected_at))) / 3600.0 AS hours_over
+  FROM runs r JOIN tbl t ON t.endpoint_id = r.endpoint_id AND t.datname = r.datname
+    AND t.schema_name = r.schema_name AND t.table_name = r.table_name
+  WHERE r.over_now AND (r.last_under IS NULL OR t.collected_at > r.last_under)
+  GROUP BY r.endpoint_id, r.datname, r.schema_name, r.table_name, r.last_at, r.n_dead_tup, r.vacuum_threshold)
+SELECT s.project_id, s.branch_id, s.endpoint_id,
+       w.datname || ':' || w.schema_name || '.' || w.table_name AS object, w.datname,
+       '"' || replace(w.schema_name, '"', '""') || '"."' || replace(w.table_name, '"', '""') || '"' AS table_ident,
+       w.hours_over AS measure, round(w.hours_over, 2) AS hours_over, w.n_dead_tup,
+       round(w.vacuum_threshold) AS vacuum_threshold, s.busy_workers, s.max_workers
+FROM saturated s JOIN waiting w ON w.endpoint_id = s.endpoint_id AND w.last_at = s.latest
+"""
+run_delta(SQL, "autovacuum_saturation", measure="measure", thresholds={'warning': 1.0}, direction="above")
 
 # COMMAND ----------
 
@@ -963,12 +1032,50 @@ SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) || '@' || use
        count(*) AS measure, max(temp_blks_written) AS max_temp_blks,
        max(CASE WHEN plan_json RLIKE '"Sort Space Type":\\s*"Disk"' THEN 1 ELSE 0 END) AS disk_sort,
        max(CASE WHEN plan_json RLIKE '"Hash Batches":\\s*([2-9]|[1-9][0-9]+)' THEN 1 ELSE 0 END) AS hash_spill
-FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer'))))
+FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')))
 WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled AND usename IS NOT NULL
   AND (plan_json RLIKE '"Sort Space Type":\\s*"Disk"' OR plan_json RLIKE '"Hash Batches":\\s*([2-9]|[1-9][0-9]+)')
 GROUP BY project_id, branch_id, endpoint_id, queryid, usename
 """
 run_delta(SQL, "disk_spill", measure="measure", thresholds={'warning': 0.0, 'critical': 100.0}, direction="above")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### `getpage_latency_spike`: Storage read latency spiked
+# MAGIC
+# MAGIC **Category:** performance | **Severity:** warning if `measure` > 2; info if `measure` > 0 | **Schedule:** every run
+# MAGIC
+# MAGIC 5-minute windows in the last 24 h whose p99 getpage wait (time per page read from the pageserver after a local cache miss, from plan_history: neon_getpage_wait_us / neon_getpage_count per execution, at least 5 executions) was more than 5 times the endpoint's 24 h baseline (the median of the 5-minute p99s) and above 20 ms. The measure is the largest number of such spike windows within 6 consecutive 5-minute windows (30 min). A warning needs 3 of 6: a sustained stall, not a single slow window; one or two (for example the on-demand layer download after a resume, where a p99 over a handful of executions is really their maximum) are information. Cache misses stall queries: raise min CU when the working set is near the cache size, and serve heavy reads from a read replica while synced tables refresh.
+# MAGIC
+# MAGIC - **Candidate fix** (manual, risk moderate): `Raise min CU on {object} if the working set is near the cache size; move heavy reads to a read replica during synced-table refreshes.`
+# MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
+
+# COMMAND ----------
+
+# check: getpage_latency_spike
+SQL = r"""
+WITH pages AS (
+  SELECT project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+         count(*) AS execs, percentile_approx(neon_getpage_wait_us / 1000.0 / neon_getpage_count, 0.99) AS p99_ms
+  FROM {catalog}.{schema}.raw_plan_history
+  WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND neon_getpage_count > 0
+  GROUP BY project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+base AS (SELECT endpoint_id, percentile_approx(p99_ms, 0.5) AS baseline_ms FROM pages GROUP BY endpoint_id),
+spikes AS (
+  SELECT p.*, b.baseline_ms FROM pages p JOIN base b ON b.endpoint_id = p.endpoint_id
+  WHERE p.execs >= 5 AND p.p99_ms > 5 * b.baseline_ms AND p.p99_ms > 20),
+runs AS (  -- spike windows among this one and the 5 before it (6 consecutive 5-minute windows)
+  SELECT s.*, count(*) OVER (PARTITION BY endpoint_id ORDER BY unix_timestamp(bucket)
+                             RANGE BETWEEN 1500 PRECEDING AND CURRENT ROW) AS in_30_min
+  FROM spikes s)
+SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, CAST(max(in_30_min) AS DOUBLE) AS measure,
+       count(*) AS spike_windows, round(max(p99_ms), 2) AS worst_p99_ms, round(max(baseline_ms), 2) AS baseline_ms,
+       max_by(bucket, p99_ms) AS worst_at, round(max(p99_ms / NULLIF(baseline_ms, 0)), 1) AS worst_ratio,
+       'plan_history' AS source
+FROM runs GROUP BY project_id, branch_id, endpoint_id
+"""
+run_delta(SQL, "getpage_latency_spike", measure="measure", thresholds={'info': 0.0, 'warning': 2.0}, direction="above")
 
 # COMMAND ----------
 
@@ -990,7 +1097,7 @@ SQL = r"""
 WITH p AS (
   SELECT project_id, branch_id, endpoint_id, queryid, plan_fingerprint, max(query_text) AS query_text,
          count(*) AS execs, percentile_approx(duration_ms, 0.5) AS p50_ms
-  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer')))) WHERE ts >= current_timestamp() - INTERVAL 7 DAYS
+  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/'))) WHERE ts >= current_timestamp() - INTERVAL 7 DAYS
   GROUP BY project_id, branch_id, endpoint_id, queryid, plan_fingerprint HAVING count(*) >= 5)
 SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
        count(*) AS plan_shapes, max(p50_ms) / NULLIF(min(p50_ms), 0) AS measure
@@ -1019,7 +1126,7 @@ WITH w AS (
   SELECT project_id, branch_id, endpoint_id, queryid, max(query) AS query_text,
          CASE WHEN ts >= current_timestamp() - INTERVAL 24 HOURS THEN 'recent' ELSE 'baseline' END AS win,
          sum(calls) AS calls, sum(total_exec_time) AS t
-  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid)
+  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND ((coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) UNION SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(query, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) tq ON t.branch_id = tq.branch_id AND t.userid = tq.userid AND t.queryid = tq.queryid)
   WHERE ts >= current_timestamp() - INTERVAL 7 DAYS AND toplevel
   GROUP BY project_id, branch_id, endpoint_id, queryid,
            CASE WHEN ts >= current_timestamp() - INTERVAL 24 HOURS THEN 'recent' ELSE 'baseline' END)
@@ -1055,7 +1162,7 @@ WITH e AS (
   SELECT project_id, branch_id, endpoint_id, queryid, ts, plan_rows, actual_rows,
          greatest(greatest(actual_rows, 1) / greatest(plan_rows, 1),
                   greatest(plan_rows, 1) / greatest(actual_rows, 1)) AS factor
-  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer'))))
+  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')))
   WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled
     -- writes return 0 rows from ModifyTable; a redacted plan (PII mask) cannot show the node type, so it counts
     -- only when rows came back
@@ -1068,7 +1175,7 @@ m AS (
   FROM e GROUP BY project_id, branch_id, endpoint_id, queryid),
 s AS (
   SELECT endpoint_id, queryid, sum(calls) AS calls, sum(total_exec_time) AS total_ms
-  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid)
+  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND ((coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) UNION SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(query, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) tq ON t.branch_id = tq.branch_id AND t.userid = tq.userid AND t.queryid = tq.queryid)
   WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND toplevel
   GROUP BY endpoint_id, queryid),
 t AS (SELECT endpoint_id, sum(total_ms) AS endpoint_ms FROM s GROUP BY endpoint_id),
@@ -1110,7 +1217,7 @@ WITH s AS (
   SELECT project_id, branch_id, endpoint_id, queryid, query_text,
          regexp_extract_all(plan_json, '"Node Type":\\s*"([^"]+)"', 1) AS types,
          transform(regexp_extract_all(plan_json, '"Actual Rows":\\s*([0-9.]+)', 1), x -> try_cast(x AS DOUBLE)) AS rws
-  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer'))))
+  FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')))
   WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND analyze_enabled)
 SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
        count(*) AS execs, max(array_max(rws)) AS max_rows_read, max(try_element_at(rws, 1)) AS limit_rows,
@@ -1142,7 +1249,7 @@ SQL = r"""
 SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, max(query_text) AS query_text,
        count(*) AS execs, avg(duration_ms) AS avg_ms,
        100 * avg(neon_getpage_wait_us / 1000.0 / NULLIF(duration_ms, 0)) AS measure
-FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer')))) WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+FROM (SELECT * FROM {catalog}.{schema}.raw_plan_history WHERE NOT ((coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$') OR (coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/'))) WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
 GROUP BY project_id, branch_id, endpoint_id, queryid HAVING count(*) >= 10
 """
 run_delta(SQL, "storage_wait", measure="measure", thresholds={'warning': 10.0, 'critical': 30.0}, direction="above")
@@ -1167,7 +1274,7 @@ SQL = r"""
 WITH q AS (
   SELECT project_id, branch_id, endpoint_id, queryid, max(query) AS query_text, sum(calls) AS calls,
          sum(total_exec_time) AS total_ms, sum(temp_blks_written) AS temp_blks_written
-  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid)
+  FROM (SELECT t.* FROM {catalog}.{schema}.raw_pg_stat_statements_counters t LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(usename, '') IN ('cloud_admin', 'databricks_control_plane', 'databricks_monitor', '00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000f1') OR coalesce(usename, '') RLIKE '^databricks_writer_[0-9]+$')) x ON t.branch_id = x.branch_id AND t.userid = x.userid LEFT ANTI JOIN (SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_plan_history WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND ((coalesce(application_name, '') IN ('lakebase-health', 'lakebase-health-fixer', 'pg_sage', 'lakebase-health-notebook')) OR (coalesce(query_text, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) UNION SELECT DISTINCT branch_id, userid, queryid FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 8 DAYS AND (coalesce(query, '') RLIKE '^\\s*/\\*\\s*(pg_sage|lakebase-health)([^a-z0-9_-][^*]*)?\\*/')) tq ON t.branch_id = tq.branch_id AND t.userid = tq.userid AND t.queryid = tq.queryid)
   WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND toplevel
   GROUP BY project_id, branch_id, endpoint_id, queryid)
 SELECT project_id, branch_id, endpoint_id, CAST(queryid AS STRING) AS object, CAST(queryid AS STRING) AS queryid, query_text, calls,
@@ -1271,6 +1378,116 @@ run_delta(SQL, "rollback_ratio", measure="measure", thresholds={'warning': 1.0, 
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC #### `synced_full_refresh`: Synced table fully refreshed
+# MAGIC
+# MAGIC **Category:** throughput | **Severity:** warning if `measure` > 1; info if `measure` > 0 | **Schedule:** every run
+# MAGIC
+# MAGIC In the last 24 h one analysis window inserted at least half of a synced table's rows (inventory_activity deltas), the sign of a full refresh. A full refresh rewrites every row and index, floods WAL and evicts the cache; it is a warning when it overlapped a getpage latency spike on the same endpoint (measure 2), information otherwise (measure 1). The WAL in the evidence counts every role, the sync pipeline's databricks_writer_n included. Prefer triggered or continuous sync, drop unused secondary indexes from the synced table's definition first, and schedule full refreshes off-peak.
+# MAGIC
+# MAGIC - **Candidate fix** (manual, risk moderate): `Switch {synced_table} to triggered or continuous sync, drop unused secondary indexes from its definition before the next refresh, and schedule full refreshes off-peak.`
+# MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
+
+# COMMAND ----------
+
+# check: synced_full_refresh
+SQL = r"""
+WITH refresh AS (
+  SELECT project_id, branch_id, endpoint_id, datname, synced_table, collected_at, window_s, ins_delta,
+         100.0 * ins_delta / greatest(n_live_tup, 1) AS insert_pct
+  FROM {catalog}.{schema}.inventory_activity
+  WHERE collected_at >= current_timestamp() - INTERVAL 24 HOURS AND synced_table IS NOT NULL
+    AND window_s IS NOT NULL AND ins_delta > 0 AND ins_delta >= 0.5 * greatest(n_live_tup, 1)),
+pages AS (
+  SELECT endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket, count(*) AS execs,
+         percentile_approx(neon_getpage_wait_us / 1000.0 / neon_getpage_count, 0.99) AS p99_ms
+  FROM {catalog}.{schema}.raw_plan_history
+  WHERE ts >= current_timestamp() - INTERVAL 48 HOURS AND neon_getpage_count > 0
+  GROUP BY endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+base AS (SELECT endpoint_id, percentile_approx(p99_ms, 0.5) AS baseline_ms FROM pages GROUP BY endpoint_id),
+spikes AS (
+  SELECT p.endpoint_id, p.bucket FROM pages p JOIN base b ON b.endpoint_id = p.endpoint_id
+  WHERE p.execs >= 5 AND p.p99_ms > 5 * b.baseline_ms AND p.p99_ms > 20),
+wal AS (
+  SELECT endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+         sum(wal_bytes) AS wal_bytes, sum(wal_fpi) AS wal_fpi
+  FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 25 HOURS
+  GROUP BY endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+windows AS (
+  SELECT r.*, timestamp_seconds(unix_timestamp(r.collected_at) - r.window_s) AS window_start FROM refresh r),
+agg AS (
+  SELECT w.project_id, w.branch_id, w.endpoint_id, w.datname, w.synced_table,
+         max(CASE WHEN s.bucket IS NOT NULL THEN 1 ELSE 0 END) AS overlapped,
+         round(max(w.insert_pct), 1) AS insert_pct, max(w.ins_delta) AS rows_inserted,
+         min(w.window_start) AS first_start, max(w.collected_at) AS seen_at,
+         count(DISTINCT s.bucket) AS getpage_spike_buckets
+  FROM windows w
+  LEFT JOIN spikes s ON s.endpoint_id = w.endpoint_id AND s.bucket >= w.window_start AND s.bucket <= w.collected_at
+  GROUP BY w.project_id, w.branch_id, w.endpoint_id, w.datname, w.synced_table)
+SELECT a.project_id, a.branch_id, a.endpoint_id, a.datname || ':' || a.synced_table AS object, a.datname,
+       a.synced_table, CASE WHEN a.overlapped = 1 THEN 2.0 ELSE 1.0 END AS measure, a.insert_pct,
+       a.rows_inserted, a.seen_at, a.getpage_spike_buckets, sum(x.wal_bytes) AS wal_bytes, sum(x.wal_fpi) AS wal_fpi
+FROM agg a
+LEFT JOIN wal x ON x.endpoint_id = a.endpoint_id AND x.bucket >= a.first_start AND x.bucket <= a.seen_at
+GROUP BY a.project_id, a.branch_id, a.endpoint_id, a.datname, a.synced_table, a.overlapped, a.insert_pct,
+         a.rows_inserted, a.seen_at, a.getpage_spike_buckets
+"""
+run_delta(SQL, "synced_full_refresh", measure="measure", thresholds={'info': 0.0, 'warning': 1.0}, direction="above")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### `wal_burst`: Bursts of WAL far above the usual rate
+# MAGIC
+# MAGIC **Category:** throughput | **Severity:** warning if `measure` > 3; info if `measure` > 0 | **Schedule:** every run
+# MAGIC
+# MAGIC 5-minute windows in the last 24 h whose WAL volume was more than 10 times the endpoint's median 5-minute volume and more than 1 GiB (measure = number of bursts; a warning above 3 a day). WAL comes from the statements that wrote it (pg_stat_statements_counters wal_bytes and full-page images), counting every role: WAL volume is a property of the endpoint, and the synced-table pipeline (databricks_writer_n) is often its largest writer. So top_wal_queryid and top_wal_role name the COPY, bulk load, index build or sync behind the worst burst; a sync writer is labelled "synced-table pipeline (databricks_writer_n)" in top_wal_source. Bursts throttle writes and slow replicas: batch bulk loads, build indexes off-peak and avoid rewriting whole tables.
+# MAGIC
+# MAGIC - **Candidate fix** (manual, risk moderate): `Find the largest WAL writer at the worst burst, {top_wal_source}: batch it, run it off-peak, or build indexes after the load; for a synced-table pipeline, prefer triggered or continuous sync to full refreshes.`
+# MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
+
+# COMMAND ----------
+
+# check: wal_burst
+SQL = r"""
+WITH b AS (
+  SELECT project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+         sum(wal_bytes) AS wal_bytes, sum(wal_fpi) AS wal_fpi
+  FROM {catalog}.{schema}.raw_pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+m AS (SELECT endpoint_id, percentile_approx(wal_bytes, 0.5) AS median_bytes FROM b GROUP BY endpoint_id),
+bursts AS (
+  SELECT b.*, m.median_bytes FROM b JOIN m ON m.endpoint_id = b.endpoint_id
+  WHERE b.wal_bytes > 10 * m.median_bytes AND b.wal_bytes > 1073741824),
+roles AS (  -- role names by OID, as plan_history recorded them on the branch
+  SELECT branch_id, userid, max(usename) AS usename FROM {catalog}.{schema}.raw_plan_history
+  WHERE ts >= current_timestamp() - INTERVAL 8 DAYS GROUP BY branch_id, userid),
+top AS (
+  SELECT s.endpoint_id, timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300) AS bucket,
+         max_by(CAST(s.queryid AS STRING), s.wal_bytes) AS top_queryid,
+         max_by(coalesce(r.usename, CONCAT('userid ', CAST(s.userid AS STRING))), s.wal_bytes) AS top_role
+  FROM {catalog}.{schema}.raw_pg_stat_statements_counters s
+  JOIN bursts x ON x.endpoint_id = s.endpoint_id
+    AND x.bucket = timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300)
+  LEFT JOIN roles r ON r.branch_id = s.branch_id AND r.userid = s.userid
+  WHERE s.ts >= current_timestamp() - INTERVAL 24 HOURS
+  GROUP BY s.endpoint_id, timestamp_seconds(floor(unix_timestamp(s.ts) / 300) * 300))
+SELECT x.project_id, x.branch_id, x.endpoint_id, x.endpoint_id AS object, CAST(count(*) AS DOUBLE) AS measure,
+       max(x.wal_bytes) AS max_burst_bytes, max_by(x.wal_fpi, x.wal_bytes) AS max_burst_fpi,
+       max(x.median_bytes) AS median_bytes, max_by(x.bucket, x.wal_bytes) AS worst_at,
+       max_by(t.top_queryid, x.wal_bytes) AS top_wal_queryid,
+       max_by(t.top_role, x.wal_bytes) AS top_wal_role,
+       coalesce(CASE WHEN max_by(t.top_role, x.wal_bytes) RLIKE '^databricks_writer_[0-9]+$'
+            THEN CONCAT('synced-table pipeline (', max_by(t.top_role, x.wal_bytes), ')')
+            ELSE CONCAT('statement ', max_by(t.top_queryid, x.wal_bytes), ' as ', max_by(t.top_role, x.wal_bytes))
+       END, 'an unidentified statement') AS top_wal_source
+FROM bursts x LEFT JOIN top t ON t.endpoint_id = x.endpoint_id AND t.bucket = x.bucket
+GROUP BY x.project_id, x.branch_id, x.endpoint_id
+"""
+run_delta(SQL, "wal_burst", measure="measure", thresholds={'info': 0.0, 'warning': 3.0}, direction="above")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Postgres checks
 # MAGIC
 # MAGIC Run over a Postgres connection on one endpoint (the `endpoint_id` widget, or the project's default-branch read-write endpoint), read-only, with the engine's session settings. Checks that run per database run in every database of the branch, like the engine; the others run once. You need a Postgres role on the branch (OAuth). Connecting wakes a suspended compute, which the engine never does (it skips inactive computes).
@@ -1344,6 +1561,53 @@ WHERE name IN ('idle_in_transaction_session_timeout', 'statement_timeout', 'trac
 """
 run_pg(SQL, "guardrail_settings", measure="measure", thresholds={'info': 0.0, 'warning': 1.0}, direction="above",
        per_database=True, requires_extension=None, guards=())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Postgres: connectivity
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #### `suspend_blockers`: Idle clients keep the compute from scaling to zero
+# MAGIC
+# MAGIC **Category:** connectivity | **Severity:** warning if `measure` > 0 | **Schedule:** every run
+# MAGIC
+# MAGIC Scale to zero is on, the compute has not suspended for 24 h (Postgres started more than 24 h ago), and yet it has been otherwise idle: no client is running a query or holding a transaction, and no client query finished within the suspend timeout. Only then do open idle connections explain why it stays awake. A busy compute with a connection pool is not reported: it is awake because of its traffic, and closing idle connections would not let it suspend. A Postgres check cannot read CPU; no client query for longer than the suspend timeout stands in for low CPU, because client queries are what keep it busy. Our own sessions and platform polling (databricks_monitor, databricks_control_plane) do not count as activity. One result per role and application with session counts, never process ids. Set the pool's minimum idle connections to 0 or close idle connections in the client, and stop agents that poll the database.
+# MAGIC
+# MAGIC - **Candidate fix** (manual, risk safe): `Set the minimum idle connections of the pool behind {object} to 0 (or close idle connections) and stop agents that poll the database; the compute can then suspend after {suspend_timeout_s} s idle.`
+# MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
+# MAGIC - **Runs:** once per endpoint (instance-wide catalogs)
+
+# COMMAND ----------
+
+# check: suspend_blockers
+SQL = r"""
+SELECT coalesce(nullif(a.application_name, ''), '(no application_name)') || ' as ' || a.usename AS object,
+       a.usename AS role, nullif(a.application_name, '') AS application_name,
+       count(*)::float8 AS measure, count(*) AS idle_sessions,
+       round(max(extract(epoch FROM now() - a.state_change)))::bigint AS max_idle_s,
+       round(min(extract(epoch FROM now() - a.state_change)))::bigint AS last_client_query_s,
+       {suspend_timeout_s} AS suspend_timeout_s,
+       round(extract(epoch FROM now() - pg_postmaster_start_time()) / 3600.0)::bigint AS hours_since_start
+FROM pg_stat_activity a
+WHERE a.backend_type = 'client backend' AND a.state = 'idle' AND a.pid <> pg_backend_pid()
+  AND now() - a.state_change > make_interval(secs => {suspend_timeout_s})
+  AND now() - pg_postmaster_start_time() > interval '24 hours'
+  AND a.usename NOT IN ('cloud_admin') AND a.usename NOT IN ('databricks_control_plane', 'databricks_monitor')
+  AND coalesce(a.application_name, '') NOT IN ('lakebase-health', 'lakebase-health-fixer')
+  -- the compute is otherwise idle: no client is busy now, and none ran a query within the suspend timeout
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_stat_activity b
+    WHERE b.backend_type = 'client backend' AND b.pid <> pg_backend_pid()
+      AND b.usename NOT IN ('cloud_admin') AND b.usename NOT IN ('databricks_control_plane', 'databricks_monitor')
+      AND coalesce(b.application_name, '') NOT IN ('lakebase-health', 'lakebase-health-fixer')
+      AND (b.state IS DISTINCT FROM 'idle' OR now() - b.state_change <= make_interval(secs => {suspend_timeout_s})))
+GROUP BY a.usename, a.application_name
+"""
+run_pg(SQL, "suspend_blockers", measure="measure", thresholds={'warning': 0.0}, direction="above",
+       per_database=False, requires_extension=None, guards=())
 
 # COMMAND ----------
 
@@ -1508,7 +1772,8 @@ WITH d AS (
          coalesce(i.indexprs::text, '') || '|' || coalesce(i.indpred::text, '') AS sig,
          quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS ident, n.nspname
   FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'hint_plan', 'sage')),
+  LEFT JOIN (SELECT c.oid AS relid, quote_ident(rn.nspname) || '.' || quote_ident(r.relname) AS synced_table FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_class r ON r.oid = coalesce(pg_partition_root(c.oid), c.oid) JOIN pg_namespace rn ON rn.oid = r.relnamespace WHERE c.relkind IN ('r', 'p') AND ((n.nspname = '__db_system' AND r.oid <> c.oid) OR pg_get_userbyid(r.relowner) ~ '^databricks_writer_[0-9]+$')) st ON st.relid = i.indrelid  -- synced storage: synced_index_review instead
+  WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'hint_plan', 'sage') AND st.relid IS NULL),
 r AS (SELECT d.*, row_number() OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS rn,
              first_value(ident) OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS kept
       FROM d)
@@ -1677,7 +1942,8 @@ FROM pg_index a
 JOIN pg_index b ON a.indrelid = b.indrelid AND a.indexrelid <> b.indexrelid
 JOIN pg_class ca ON ca.oid = a.indexrelid JOIN pg_namespace na ON na.oid = ca.relnamespace
 JOIN pg_class cb ON cb.oid = b.indexrelid JOIN pg_namespace nb ON nb.oid = cb.relnamespace
-WHERE ca.relam = cb.relam AND NOT a.indisunique AND NOT a.indisprimary AND b.indisvalid
+LEFT JOIN (SELECT c.oid AS relid, quote_ident(rn.nspname) || '.' || quote_ident(r.relname) AS synced_table FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_class r ON r.oid = coalesce(pg_partition_root(c.oid), c.oid) JOIN pg_namespace rn ON rn.oid = r.relnamespace WHERE c.relkind IN ('r', 'p') AND ((n.nspname = '__db_system' AND r.oid <> c.oid) OR pg_get_userbyid(r.relowner) ~ '^databricks_writer_[0-9]+$')) st ON st.relid = a.indrelid  -- the sync owns indexes on synced storage
+WHERE st.relid IS NULL AND ca.relam = cb.relam AND NOT a.indisunique AND NOT a.indisprimary AND b.indisvalid
   AND a.indpred IS NULL AND b.indpred IS NULL AND a.indexprs IS NULL AND b.indexprs IS NULL
   AND b.indkey::text LIKE a.indkey::text || ' %'
   AND na.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'hint_plan', 'sage')
@@ -1692,7 +1958,7 @@ run_pg(SQL, "redundant_index", measure="measure", thresholds={'warning': 0.0, 'c
 # MAGIC
 # MAGIC **Category:** indexing | **Severity:** critical if `measure` > 1e+06; warning if `measure` > 10000 | **Schedule:** every run
 # MAGIC
-# MAGIC Average rows read per sequential scan on a table with more than 10k live rows. Find the queries scanning it (top_db_time_query) and index their filter and join columns; verify the index on a branch.
+# MAGIC Average rows read per sequential scan on a table with more than 10k live rows. Find the queries scanning it (top_db_time_query) and index their filter and join columns; verify the index on a branch. Not run until the statistics are 24 h old (stats reset or compute start).
 # MAGIC
 # MAGIC - **Candidate fix** (manual, risk moderate): `Index the filter columns of the queries scanning {object}.`
 # MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
@@ -1715,11 +1981,58 @@ run_pg(SQL, "seq_scan_heavy", measure="measure", thresholds={'warning': 10000.0,
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC #### `synced_index_review`: Index on a synced table to review
+# MAGIC
+# MAGIC **Category:** indexing | **Severity:** info if `measure` > 0 | **Schedule:** every run
+# MAGIC
+# MAGIC An index on a synced table's storage that is never used (no scans since statistics reset) or duplicates another index on the same storage. The unused_index and duplicate_index checks skip synced tables because the sync owns their indexes: Postgres refuses to drop a partition's index and a full refresh rebuilds them. Confirm it stays unused across a full refresh cycle, then remove it from the synced table's definition (parent_index names the index to change). No fix action is proposed.
+# MAGIC
+# MAGIC - **Candidate fix** (manual, risk moderate): `Confirm {object} stays unused across a full refresh of {synced_table}, then remove {parent_index} from the synced table's definition; never drop it on the partition.`
+# MAGIC - **Fixer can apply it:** no (manual fix; a person applies it)
+# MAGIC - **Runs:** in every database
+
+# COMMAND ----------
+
+# check: synced_index_review
+SQL = r"""
+WITH st AS (SELECT c.oid AS relid, quote_ident(rn.nspname) || '.' || quote_ident(r.relname) AS synced_table FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_class r ON r.oid = coalesce(pg_partition_root(c.oid), c.oid) JOIN pg_namespace rn ON rn.oid = r.relnamespace WHERE c.relkind IN ('r', 'p') AND ((n.nspname = '__db_system' AND r.oid <> c.oid) OR pg_get_userbyid(r.relowner) ~ '^databricks_writer_[0-9]+$')),
+ix AS (
+  SELECT i.indexrelid, i.indrelid, st.synced_table,
+         i.indrelid::text || '|' || i.indclass::text || '|' || i.indkey::text || '|' ||
+         coalesce(i.indexprs::text, '') || '|' || coalesce(i.indpred::text, '') AS sig,
+         quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS ident,
+         i.indisunique OR i.indisprimary
+           OR EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid) AS kept_always,
+         coalesce(s.idx_scan, 0) AS idx_scan
+  FROM pg_index i JOIN st ON st.relid = i.indrelid
+  JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+  LEFT JOIN pg_stat_user_indexes s ON s.indexrelid = i.indexrelid
+  WHERE i.indisvalid AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'hint_plan', 'sage')),
+r AS (SELECT ix.*, row_number() OVER (PARTITION BY sig ORDER BY kept_always DESC, ident) AS rn,
+             first_value(ident) OVER (PARTITION BY sig ORDER BY kept_always DESC, ident) AS kept_index
+      FROM ix)
+SELECT r.ident AS object, r.synced_table, r.idx_scan,
+       CASE WHEN r.rn > 1 THEN 'duplicate' ELSE 'unused' END AS reason,
+       CASE WHEN r.rn > 1 THEN r.kept_index END AS duplicate_of,
+       coalesce((SELECT quote_ident(pn.nspname) || '.' || quote_ident(pc.relname)
+                 FROM pg_inherits h JOIN pg_class pc ON pc.oid = h.inhparent
+                 JOIN pg_namespace pn ON pn.oid = pc.relnamespace WHERE h.inhrelid = r.indexrelid), r.ident)
+         AS parent_index,
+       pg_relation_size(r.indexrelid)::float8 AS measure
+FROM r
+WHERE NOT r.kept_always AND (r.rn > 1 OR r.idx_scan = 0)
+"""
+run_pg(SQL, "synced_index_review", measure="measure", thresholds={'info': 0.0}, direction="above",
+       per_database=True, requires_extension=None, guards=())
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC #### `unused_index`: Index never used
 # MAGIC
 # MAGIC **Category:** indexing | **Severity:** critical if `measure` > 1.07374e+09; warning if `measure` > 1.04858e+08; info if `measure` > 0 | **Schedule:** every run
 # MAGIC
-# MAGIC Non-unique, non-constraint index with zero scans since statistics reset (measure = size in bytes) on the primary and on every read replica of the branch (usage counters are per compute, so an index can serve only replica reads). It costs writes and storage. Confidence is low when a replica could not be read or its counters were reset recently; only trust this when the statistics window covers a full business cycle.
+# MAGIC Non-unique, non-constraint index with zero scans since statistics reset (measure = size in bytes) on the primary and on every read replica of the branch (usage counters are per compute, so an index can serve only replica reads). It costs writes and storage. Confidence is low when a replica could not be read or its counters were reset recently; only trust this when the statistics window covers a full business cycle. Not run until the statistics are 24 h old (stats reset or compute start).
 # MAGIC
 # MAGIC - **Candidate fix** (ddl, risk high, reversible): `DROP INDEX CONCURRENTLY {index_ident};`
 # MAGIC - **Rollback:** `{index_def_concurrently};`
@@ -1738,7 +2051,8 @@ SELECT quote_ident(s.schemaname) || '.' || quote_ident(s.indexrelname) AS object
        s.relname AS table_name, s.idx_scan, pg_relation_size(s.indexrelid)::float8 AS measure,
        pg_get_indexdef(s.indexrelid) AS index_def
 FROM pg_stat_user_indexes s JOIN pg_index i ON i.indexrelid = s.indexrelid
-WHERE s.idx_scan = 0 AND NOT i.indisunique AND NOT i.indisprimary AND i.indisvalid
+LEFT JOIN (SELECT c.oid AS relid, quote_ident(rn.nspname) || '.' || quote_ident(r.relname) AS synced_table FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_class r ON r.oid = coalesce(pg_partition_root(c.oid), c.oid) JOIN pg_namespace rn ON rn.oid = r.relnamespace WHERE c.relkind IN ('r', 'p') AND ((n.nspname = '__db_system' AND r.oid <> c.oid) OR pg_get_userbyid(r.relowner) ~ '^databricks_writer_[0-9]+$')) st ON st.relid = s.relid  -- synced storage: synced_index_review instead
+WHERE st.relid IS NULL AND s.idx_scan = 0 AND NOT i.indisunique AND NOT i.indisprimary AND i.indisvalid
   AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = s.indexrelid)
   AND s.schemaname NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'hint_plan', 'sage')
 """
@@ -1853,7 +2167,7 @@ run_pg(SQL, "autovacuum_scale_factor", measure="measure", thresholds={'warning':
 # MAGIC
 # MAGIC **Category:** maintenance | **Severity:** critical if `measure` > 20; warning if `measure` > 10 | **Schedule:** every run
 # MAGIC
-# MAGIC Dead tuples as a share of all tuples on tables with more than 10k rows. Vacuum is falling behind or blocked; check autovacuum_blocker first, then tune autovacuum per table.
+# MAGIC Dead tuples as a share of all tuples on tables with more than 10k rows. Vacuum is falling behind or blocked; check autovacuum_blocker first, then tune autovacuum per table. Not run until the statistics are 24 h old (stats reset or compute start).
 # MAGIC
 # MAGIC - **Candidate fix** (ddl, risk safe, reversible): `VACUUM (ANALYZE) {table_ident};`
 # MAGIC - **Rollback:** not needed — VACUUM changes no data

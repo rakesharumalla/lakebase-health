@@ -1,0 +1,44 @@
+id: synced_index_review
+title: "Index on a synced table to review"
+category: indexing
+area: indexes
+source: postgres
+min_stats_hours: 24   # counter-based: not run until stats_reset / postmaster start is 24 h old
+thresholds: {info: 0}
+explain: >
+  An index on a synced table's storage that is never used (no scans since statistics reset) or duplicates another
+  index on the same storage. The unused_index and duplicate_index checks skip synced tables because the sync owns
+  their indexes: Postgres refuses to drop a partition's index and a full refresh rebuilds them. Confirm it stays
+  unused across a full refresh cycle, then remove it from the synced table's definition (parent_index names the
+  index to change). No fix action is proposed.
+sql: |
+  WITH st AS {synced_tables},
+  ix AS (
+    SELECT i.indexrelid, i.indrelid, st.synced_table,
+           i.indrelid::text || '|' || i.indclass::text || '|' || i.indkey::text || '|' ||
+           coalesce(i.indexprs::text, '') || '|' || coalesce(i.indpred::text, '') AS sig,
+           quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS ident,
+           i.indisunique OR i.indisprimary
+             OR EXISTS (SELECT 1 FROM pg_constraint k WHERE k.conindid = i.indexrelid) AS kept_always,
+           coalesce(s.idx_scan, 0) AS idx_scan
+    FROM pg_index i JOIN st ON st.relid = i.indrelid
+    JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_stat_user_indexes s ON s.indexrelid = i.indexrelid
+    WHERE i.indisvalid AND n.nspname NOT IN {excluded_schemas}),
+  r AS (SELECT ix.*, row_number() OVER (PARTITION BY sig ORDER BY kept_always DESC, ident) AS rn,
+               first_value(ident) OVER (PARTITION BY sig ORDER BY kept_always DESC, ident) AS kept_index
+        FROM ix)
+  SELECT r.ident AS object, r.synced_table, r.idx_scan,
+         CASE WHEN r.rn > 1 THEN 'duplicate' ELSE 'unused' END AS reason,
+         CASE WHEN r.rn > 1 THEN r.kept_index END AS duplicate_of,
+         coalesce((SELECT quote_ident(pn.nspname) || '.' || quote_ident(pc.relname)
+                   FROM pg_inherits h JOIN pg_class pc ON pc.oid = h.inhparent
+                   JOIN pg_namespace pn ON pn.oid = pc.relnamespace WHERE h.inhrelid = r.indexrelid), r.ident)
+           AS parent_index,
+         pg_relation_size(r.indexrelid)::float8 AS measure
+  FROM r
+  WHERE NOT r.kept_always AND (r.rn > 1 OR r.idx_scan = 0)
+fix:
+  kind: manual
+  template: "Confirm {object} stays unused across a full refresh of {synced_table}, then remove {parent_index} from the synced table's definition; never drop it on the partition."
+  risk: moderate

@@ -1,6 +1,7 @@
 id: connection_utilization
 title: "Connections near the compute limit"
 category: capacity
+area: connections
 source: delta
 thresholds: {warning: 70, critical: 85}
 explain: >

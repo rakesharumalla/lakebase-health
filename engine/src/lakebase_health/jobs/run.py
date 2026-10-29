@@ -16,6 +16,7 @@ from ..executors.delta import DeltaExecutor
 from ..executors.postgres import PostgresExecutor
 from ..ingest import ingest_all
 from ..inventory import build_inventory
+from ..pg_inventory import collect_inventory
 from ..fixer.postcheck import run_postcheck, run_rewrite_postcheck
 from ..record import load_last_ok, persist, persist_regressions, resolve_rolled_back
 from ..runner import Runner
@@ -97,8 +98,16 @@ def run_engine(sql, w, cfg, connect=None, now=None, checks_dir=None, skip_ingest
 
     t = time.monotonic()
     excl = load_exclusions(checks_dir / "exclusions.yaml").with_query_users(service_roles(cfg, me))
-    specs = load_checks(checks_dir, frozenset(API_CHECKS))
     pg = PostgresExecutor(w, me, connect)
+    try:  # before the checks: autovacuum_saturation and synced_full_refresh read this run's snapshot
+        inventory_counts = collect_inventory(sql, cfg, pg, excl, inventory, run["run_id"], now, errors)
+    except Exception as e:
+        inventory_counts = None
+        errors.append(f"pg inventory: {type(e).__name__}: {e}")
+    steps["pg_inventory"] = time.monotonic() - t
+
+    t = time.monotonic()
+    specs = load_checks(checks_dir, frozenset(API_CHECKS))
     runner = Runner(DeltaExecutor(sql, cfg, excl), pg, ApiExecutor(excl), excl)
     outcomes = runner.run(specs, inventory, now, load_last_ok(sql, cfg), stale)
     errors += [f"check {o.check_id} {o.scope}: {o.error}" for o in outcomes if o.status in ("error", "timeout")]
@@ -106,6 +115,7 @@ def run_engine(sql, w, cfg, connect=None, now=None, checks_dir=None, skip_ingest
 
     t = time.monotonic()
     counts = persist(sql, cfg, run["run_id"], now, outcomes, {s.id: s for s in specs}, inventory, branches)
+    counts["inventory_endpoints"] = inventory_counts["endpoints"] if inventory_counts else 0
     steps["record"] = time.monotonic() - t
 
     t = time.monotonic()

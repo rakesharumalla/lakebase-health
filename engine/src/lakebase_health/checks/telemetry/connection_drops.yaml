@@ -1,6 +1,7 @@
 id: connection_drops
 title: "Client connections dropped (SSL EOF, resets)"
 category: connectivity
+area: connections
 source: delta
 thresholds: {info: 10, warning: 100, critical: 1000}
 explain: >

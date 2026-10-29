@@ -1,6 +1,7 @@
 id: public_schema_create
 title: "Any role can create objects in a schema"
 category: security
+area: config_security
 source: postgres
 thresholds: {warning: 0}
 explain: >

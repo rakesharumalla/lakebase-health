@@ -1,6 +1,7 @@
 id: lock_wait_share
 title: "Lock waits are a large share of wait time"
 category: incidents
+area: locks
 source: delta
 thresholds: {warning: 10, critical: 25}
 explain: >

@@ -1,6 +1,7 @@
 id: guardrail_settings
 title: "Guardrail setting missing or too loose"
 category: config
+area: config_security
 source: postgres
 thresholds: {info: 0, warning: 1}
 explain: >

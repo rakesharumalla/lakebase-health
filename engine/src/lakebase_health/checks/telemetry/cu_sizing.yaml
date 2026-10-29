@@ -1,6 +1,7 @@
 id: cu_sizing
 title: "Compute size does not match the workload"
 category: capacity
+area: cache_memory
 source: delta
 superseded_by:   # cu_sizing is a composite of these signals; the specific finding names the cause
   key: endpoint

@@ -1,11 +1,14 @@
 id: dead_tuples
 title: "High share of dead tuples"
 category: maintenance
+area: vacuum_xid
 source: postgres
+min_stats_hours: 24   # counter-based: not run until stats_reset / postmaster start is 24 h old
 thresholds: {warning: 10, critical: 20}
 explain: >
   Dead tuples as a share of all tuples on tables with more than 10k rows. Vacuum is falling behind or blocked;
   check autovacuum_blocker first, then tune autovacuum per table.
+  Not run until the statistics are 24 h old (stats reset or compute start).
 sql: |
   SELECT quote_ident(schemaname) || '.' || quote_ident(relname) AS object,
          quote_ident(schemaname) || '.' || quote_ident(relname) AS table_ident,

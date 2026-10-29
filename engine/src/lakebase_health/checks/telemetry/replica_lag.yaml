@@ -1,6 +1,7 @@
 id: replica_lag
 title: "Read replica lags behind the primary"
 category: replication
+area: resilience
 source: delta
 thresholds: {warning: 1, critical: 30}
 explain: >

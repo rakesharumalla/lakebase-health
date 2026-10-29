@@ -1,6 +1,7 @@
 id: autovacuum_disabled
 title: "Autovacuum disabled on a table"
 category: maintenance
+area: vacuum_xid
 source: postgres
 thresholds: {warning: 0}
 explain: >

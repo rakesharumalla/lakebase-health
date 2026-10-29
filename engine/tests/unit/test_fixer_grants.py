@@ -89,3 +89,10 @@ def test_a_foundation_model_endpoint_needs_no_grant_and_llm_off_skips_it(tmp_pat
     (tmp_path / "log.jsonl").unlink()
     stdout, calls = _run(tmp_path, None, LLM_ENABLED="false")
     assert not any(c[0] == "serving-endpoints" for c in calls) and "no model endpoint grant" in stdout
+
+
+def test_the_app_may_write_approvals_and_audit_events(tmp_path):
+    _, calls = _run(tmp_path, None)
+    app = [s for s in _statements(calls) if s.startswith("GRANT MODIFY") and s.endswith(f"TO `{UUID}`")]
+    assert "GRANT MODIFY ON TABLE cat.lakebase_health.audit_events TO `" + UUID + "`" in app
+    assert "GRANT MODIFY ON TABLE cat.lakebase_health.approvals TO `" + UUID + "`" in app

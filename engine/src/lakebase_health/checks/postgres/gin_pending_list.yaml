@@ -1,6 +1,7 @@
 id: gin_pending_list
 title: "GIN index pending list near its limit"
 category: indexing
+area: indexes
 source: postgres
 requires_extension: pgstattuple
 thresholds: {info: 25, warning: 50, critical: 90}

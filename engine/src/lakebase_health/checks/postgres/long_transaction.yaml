@@ -1,6 +1,7 @@
 id: long_transaction
 title: "Long-running transaction"
 category: incidents
+area: connections
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 300, critical: 1800}

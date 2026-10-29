@@ -1,6 +1,7 @@
 id: autovacuum_blocker
 title: "Dead tuples pile up because something blocks vacuum"
 category: maintenance
+area: vacuum_xid
 source: postgres
 thresholds: {warning: 10, critical: 30}
 explain: >

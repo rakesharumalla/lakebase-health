@@ -17,12 +17,22 @@ STATS_WINDOW_SQL = (
 )
 
 
+# Leads every statement the engine, fixer and notebook send, so query checks can drop them whoever runs them
+# (exclusions.yaml tool_tags). pg_stat_statements computes the query id from the parse tree, which has no comments:
+# the tag never splits or merges entries; it only shows in the stored text.
+QUERY_TAG = "/* lakebase-health */ "
+
+
+def tagged(sql: str) -> str:
+    return sql if sql.lstrip().startswith("/* lakebase-health") else QUERY_TAG + sql
+
+
 class PgSession:
     def __init__(self, conn):
         self.conn = conn
 
     def query(self, sql: str) -> list:
-        cur = self.conn.execute(sql)
+        cur = self.conn.execute(tagged(sql))
         if cur.description is None:
             return []
         cols = [d.name for d in cur.description]

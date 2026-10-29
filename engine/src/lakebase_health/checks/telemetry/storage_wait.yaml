@@ -1,6 +1,7 @@
 id: storage_wait
 title: "Query waits on remote storage"
 category: performance
+area: storage_latency
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 10, critical: 30}

@@ -1,6 +1,7 @@
 id: primary_without_ha
 title: "Primary compute has no high-availability secondary"
 category: backup
+area: resilience
 source: api
 function: primary_without_ha
 thresholds: {info: 0}

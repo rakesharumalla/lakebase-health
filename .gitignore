@@ -20,3 +20,4 @@ dist/
 *.log
 # Databricks CLI profiles (credentials)
 .databrickscfg
+report-acceptance.html

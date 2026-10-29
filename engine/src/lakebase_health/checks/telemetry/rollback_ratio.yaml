@@ -1,6 +1,7 @@
 id: rollback_ratio
 title: "High transaction rollback ratio"
 category: throughput
+area: queries
 source: delta
 thresholds: {warning: 1, critical: 5}
 explain: >

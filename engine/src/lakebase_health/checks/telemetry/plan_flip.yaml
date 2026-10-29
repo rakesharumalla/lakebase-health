@@ -1,6 +1,7 @@
 id: plan_flip
 title: "Query switches between fast and slow plans"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 2, critical: 10}

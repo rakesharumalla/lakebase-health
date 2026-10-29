@@ -11,6 +11,7 @@ TELEMETRY = {
     "disk_spill", "row_misestimate", "sort_limit_waste", "storage_wait", "lock_wait_share",
     "lock_blocking_history", "postgres_errors", "xid_runway", "replica_lag", "auth_failures",
     "commit_quorum_wait", "hot_row_lock", "statement_timeouts", "gin_cleanup_lock_wait", "connection_drops",
+    "autovacuum_saturation", "synced_full_refresh", "wal_burst", "getpage_latency_spike",
 }
 POSTGRES = {
     "unused_index", "duplicate_index", "redundant_index", "invalid_index", "missing_fk_index", "seq_scan_heavy",
@@ -18,7 +19,8 @@ POSTGRES = {
     "xmin_horizon_holder", "long_transaction", "idle_in_transaction", "blocked_session", "prepared_transaction",
     "replication_slot_retention", "sequence_exhaustion", "stale_statistics", "public_schema_create",
     "privileged_roles", "table_without_pk", "non_ssl_sessions", "guardrail_settings", "config_drift",
-    "autovacuum_blocker", "gin_pending_list", "oversized_search_index",
+    "autovacuum_blocker", "gin_pending_list", "oversized_search_index", "synced_index_review",
+    "suspend_blockers",
 }
 API = {"backup_restore_window", "default_branch_unprotected", "primary_without_ha", "password_roles"}
 
@@ -80,3 +82,10 @@ def test_gin_cleanup_wait_uses_wait_counters_not_session_samples():
     # Session history does not sample GIN cleanup (Lock/page) waits; the per-interval counters do.
     sql = specs()["gin_cleanup_lock_wait"].sql
     assert "system.lakebase.wait_event_counters" in sql and "active_session_history" not in sql
+
+
+def test_counter_based_checks_wait_for_24_hours_of_statistics():
+    s = specs()
+    for i in ("unused_index", "seq_scan_heavy", "dead_tuples"):
+        assert s[i].min_stats_hours == 24, i
+    assert "INTERVAL 20 HOURS" in s["seq_scan_read_ratio"].sql

@@ -1,6 +1,7 @@
 id: privileged_roles
 title: "Login role with powerful attributes"
 category: security
+area: config_security
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {info: 0, warning: 1}

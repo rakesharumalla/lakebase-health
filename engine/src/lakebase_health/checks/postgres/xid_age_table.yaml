@@ -1,6 +1,7 @@
 id: xid_age_table
 title: "Table with old unfrozen transaction IDs"
 category: maintenance
+area: vacuum_xid
 source: postgres
 thresholds: {warning: 200000000, critical: 1000000000}
 explain: >

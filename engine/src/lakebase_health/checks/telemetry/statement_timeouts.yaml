@@ -1,6 +1,7 @@
 id: statement_timeouts
 title: "Statements cancelled by statement_timeout"
 category: incidents
+area: queries
 source: delta
 thresholds: {info: 1, warning: 10, critical: 100}
 explain: >

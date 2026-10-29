@@ -1,6 +1,7 @@
 id: duplicate_index
 title: "Duplicate index"
 category: indexing
+area: indexes
 source: postgres
 thresholds: {warning: 0, critical: 1073741824}
 explain: >
@@ -13,7 +14,8 @@ sql: |
            coalesce(i.indexprs::text, '') || '|' || coalesce(i.indpred::text, '') AS sig,
            quote_ident(n.nspname) || '.' || quote_ident(c.relname) AS ident, n.nspname
     FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE n.nspname NOT IN {excluded_schemas}),
+    LEFT JOIN {synced_tables} st ON st.relid = i.indrelid  -- synced storage: synced_index_review instead
+    WHERE n.nspname NOT IN {excluded_schemas} AND st.relid IS NULL),
   r AS (SELECT d.*, row_number() OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS rn,
                first_value(ident) OVER (PARTITION BY sig ORDER BY indisprimary DESC, indisunique DESC, ident) AS kept
         FROM d)

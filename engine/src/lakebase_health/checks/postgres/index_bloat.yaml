@@ -1,6 +1,7 @@
 id: index_bloat
 title: "B-tree index bloat"
 category: maintenance
+area: tables_bloat
 source: postgres
 schedule: daily
 requires_extension: pgstattuple

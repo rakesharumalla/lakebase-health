@@ -1,6 +1,7 @@
 id: working_set_vs_cache
 title: "Working set larger than the compute cache"
 category: capacity
+area: cache_memory
 source: delta
 superseded_by:   # the low hit rate is the measured effect of the same too-small cache; same fix (min CU)
   key: endpoint

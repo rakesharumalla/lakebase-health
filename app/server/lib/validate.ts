@@ -13,6 +13,8 @@ export const parseFingerprint = match(FINGERPRINT);
 export const parseEndpointId = match(ENDPOINT);
 export const parseProjectId = match(UUID);
 export const parseActionId = match(FINGERPRINT);
+/** A branch uid, or "default" for the project's default branch (the report URL). */
+export const parseBranchRef = match(/^(default|br-[a-z0-9-]{1,61})$/);
 
 function parseDate(s: unknown): Date | null | undefined {
   if (s === undefined || s === "") return undefined;

@@ -1,6 +1,7 @@
 id: top_db_time_query
 title: "One query dominates database time"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 25, critical: 50}

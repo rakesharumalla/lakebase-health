@@ -1,0 +1,36 @@
+id: getpage_latency_spike
+title: "Storage read latency spiked"
+category: performance
+area: storage_latency
+source: delta
+thresholds: {info: 0, warning: 2}   # measure = most spike windows in 30 min: 1-2 info, 3 or more a warning
+explain: >
+  5-minute windows in the last 24 h whose p99 getpage wait (time per page read from the pageserver after a local
+  cache miss, from plan_history: neon_getpage_wait_us / neon_getpage_count per execution, at least 5 executions)
+  was more than 5 times the endpoint's 24 h baseline (the median of the 5-minute p99s) and above 20 ms. The
+  measure is the largest number of such spike windows within 6 consecutive 5-minute windows (30 min). A warning
+  needs 3 of 6: a sustained stall, not a single slow window; one or two (for example the on-demand layer download
+  after a resume, where a p99 over a handful of executions is really their maximum) are information. Cache misses
+  stall queries: raise min CU when the working set is near the cache size, and serve heavy reads from a read
+  replica while synced tables refresh.
+sql: |
+  WITH pages AS (
+    SELECT project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+           count(*) AS execs, percentile_approx(neon_getpage_wait_us / 1000.0 / neon_getpage_count, 0.99) AS p99_ms
+    FROM system.lakebase.plan_history
+    WHERE ts >= current_timestamp() - INTERVAL 24 HOURS AND neon_getpage_count > 0
+    GROUP BY project_id, branch_id, endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+  base AS (SELECT endpoint_id, percentile_approx(p99_ms, 0.5) AS baseline_ms FROM pages GROUP BY endpoint_id),
+  spikes AS (
+    SELECT p.*, b.baseline_ms FROM pages p JOIN base b ON b.endpoint_id = p.endpoint_id
+    WHERE p.execs >= 5 AND p.p99_ms > 5 * b.baseline_ms AND p.p99_ms > 20),
+  runs AS (  -- spike windows among this one and the 5 before it (6 consecutive 5-minute windows)
+    SELECT s.*, count(*) OVER (PARTITION BY endpoint_id ORDER BY unix_timestamp(bucket)
+                               RANGE BETWEEN 1500 PRECEDING AND CURRENT ROW) AS in_30_min
+    FROM spikes s)
+  SELECT project_id, branch_id, endpoint_id, endpoint_id AS object, CAST(max(in_30_min) AS DOUBLE) AS measure,
+         count(*) AS spike_windows, round(max(p99_ms), 2) AS worst_p99_ms, round(max(baseline_ms), 2) AS baseline_ms,
+         max_by(bucket, p99_ms) AS worst_at, round(max(p99_ms / NULLIF(baseline_ms, 0)), 1) AS worst_ratio,
+         'plan_history' AS source
+  FROM runs GROUP BY project_id, branch_id, endpoint_id
+fix: {kind: manual, template: "Raise min CU on {object} if the working set is near the cache size; move heavy reads to a read replica during synced-table refreshes.", risk: moderate}

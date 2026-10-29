@@ -1,6 +1,7 @@
 id: auth_failures
 title: "Repeated authentication failures"
 category: security
+area: config_security
 source: delta
 thresholds: {warning: 5, critical: 50}
 explain: >

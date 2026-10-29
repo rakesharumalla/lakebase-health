@@ -5,7 +5,9 @@ import { groupFindings, isOpen, page, type GroupRow } from "./group";
 import { maskRows } from "./mask";
 import { parseQueryPairs, queryLabel, skeleton } from "./querytext";
 import type { Row } from "./sql";
-import { parseActionId, parseEndpointId, parseFingerprint, parseProjectId, parseWindow } from "./validate";
+import { ReportNotFound, buildReport } from "../report/build";
+import { exportFilename, renderExport } from "../report/export";
+import { parseActionId, parseBranchRef, parseEndpointId, parseFingerprint, parseProjectId, parseWindow } from "./validate";
 
 export type Ctx = { token?: string; user?: string; now: Date };
 type Deps = {
@@ -13,6 +15,8 @@ type Deps = {
   runner: { run(name: string, ids: string[], params?: Record<string, string | Date>): Promise<Row[]> };
   scheduleMinutes: number;
   approvals?: Approvals;
+  /** The report export's audit row (server/writes/insert_audit.sql); absent means exports are off. */
+  audit?: Audit;
   /** LLM query rewrites: LLM_ENABLED and LLM_ENDPOINT. Absent means not set up. */
   llm?: { enabled: boolean; endpoint: string };
 };
@@ -26,6 +30,9 @@ export type Approvals = {
   trigger(): Promise<boolean | void>;
   newId(): string;
 };
+
+/** One audit_events row per report download. */
+export type Audit = { insert(row: Record<string, string>): Promise<void>; newId(): string };
 
 export class HttpError extends Error {
   constructor(
@@ -120,7 +127,7 @@ function relatedCut(related: Row[]) {
 const REWRITE = "query_rewrite";
 const ADVISORY = "a query rewrite is advisory: change it in your application code";
 
-export function createHandlers({ access, runner, scheduleMinutes, approvals, llm }: Deps) {
+export function createHandlers({ access, runner, scheduleMinutes, approvals, llm, audit }: Deps) {
   async function who(ctx: Ctx): Promise<Access> {
     try {
       return await access.resolve(ctx.token, ctx.user);
@@ -196,6 +203,22 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals, llm
     const [finding] = await runner.run("finding", a.projectIds, { fingerprint: fp });
     if (!finding) throw new HttpError(404, "not found");
     return { a, fp, finding };
+  }
+
+  // A report is visible when its project is one of the caller's; the branch must be one of that project's.
+  async function reportScope(ctx: Ctx, rawId: string, rawBranch: string) {
+    const a = await who(ctx);
+    const id = parseProjectId(rawId);
+    if (!id) throw new HttpError(400, "invalid project id");
+    const branch = parseBranchRef(rawBranch);
+    if (!branch) throw new HttpError(400, "invalid branch");
+    if (!a.projectIds.includes(id)) throw new HttpError(404, "not found");
+    try {
+      return { a, id, report: await buildReport({ runner, access: a, projectId: id, branch, now: ctx.now, scheduleMinutes }) };
+    } catch (e) {
+      if (e instanceof ReportNotFound) throw new HttpError(404, "not found");
+      throw e;
+    }
   }
 
   return {
@@ -464,6 +487,32 @@ export function createHandlers({ access, runner, scheduleMinutes, approvals, llm
       const started = await approvals.trigger();
       const out = { approvalId, attempt: view.nextAttempt };
       return started === false ? { ...out, message: SCHEDULED } : out;
+    },
+
+    /** The health report of one branch ("default" = the project's default branch), for the tabbed project page. */
+    async report(ctx: Ctx, rawId: string, rawBranch: string) {
+      return (await reportScope(ctx, rawId, rawBranch)).report;
+    },
+
+    /**
+     * "Download report": the same data, query text stripped whatever the caller's PII membership, as one HTML file.
+     * The audit row is written first; no row, no file.
+     */
+    async reportExport(ctx: Ctx, rawId: string, rawBranch: string) {
+      if (!audit) throw new HttpError(404, "not found");
+      const { a, id, report } = await reportScope(ctx, rawId, rawBranch);
+      const filename = exportFilename(report, ctx.now);
+      const html = renderExport(report);
+      const unavailable = [...(report.unavailable ?? []), ...Object.entries(report.sections).filter(([, s]) => s.status === "error").map(([k]) => k)];
+      await audit.insert({
+        event_id: audit.newId(),
+        actor: a.userName ?? ctx.user ?? "",
+        action: "report_export",
+        project_id: id,
+        branch_id: report.branch.id,
+        detail: JSON.stringify({ filename, unavailable }),
+      });
+      return { filename, html };
     },
 
     refresh(ctx: Ctx) {

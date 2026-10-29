@@ -1,6 +1,7 @@
 id: deadlocks
 title: "Deadlocks detected"
 category: incidents
+area: locks
 source: delta
 thresholds: {warning: 0, critical: 2}
 explain: >

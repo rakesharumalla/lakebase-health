@@ -102,3 +102,21 @@ def test_the_stats_read_on_the_source_branch_is_read_only_and_short():
     from lakebase_health.fixer.pg import FIXER_SETUP
     setup = FIXER_SETUP("stats")
     assert "SET default_transaction_read_only = on" in setup and "SET statement_timeout = '30s'" in setup
+
+
+def test_tagged_conn_renders_literals_against_a_real_psycopg_connection():
+    # verify.measure and draft verify call Literal(v).as_string(conn) on the TaggedConn; psycopg's
+    # Transformer reads conn.adapters and conn.connection, which the wrapper must delegate (C1)
+    import psycopg
+    from psycopg import pq, sql as pgsql
+    from lakebase_health.fixer.draft.verify import _args
+    from lakebase_health.fixer.pg import TaggedConn
+    raw = psycopg.Connection(pq.PGconn.connect_start(b"host=127.0.0.1 port=1 dbname=x connect_timeout=1"))
+    try:
+        tc = TaggedConn(raw)
+        assert pgsql.Literal(5).as_string(tc) == "5"
+        assert pgsql.Literal("a'b").as_string(tc) == "'a''b'"
+        assert _args(tc, [1, "x"]) == "1, 'x'"
+        assert tc.adapters is raw.adapters
+    finally:
+        raw.pgconn.finish()

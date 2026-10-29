@@ -1,6 +1,7 @@
 id: replication_slot_retention
 title: "Inactive replication slot retains WAL"
 category: replication
+area: vacuum_xid
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 0, critical: 1073741824}

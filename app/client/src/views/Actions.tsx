@@ -54,11 +54,12 @@ function ActionRows({ rows }: { rows: Row[] }) {
   );
 }
 
-export function ActionsView({ data }: { data: ActionsData }) {
+/** `embedded`: inside the project page's Fixes tab, which has its own header. */
+export function ActionsView({ data, embedded = false }: { data: ActionsData; embedded?: boolean }) {
   const more = useShowAll<Row>((state) => `/api/projects/${data.project.id}/actions?state=${encodeURIComponent(state)}`, groupRows);
   return (
     <div className="space-y-6">
-      <PageHeader
+      {embedded ? null : <PageHeader
         crumbs={[
           { label: "Projects", to: "/" },
           { label: data.project.name, to: `/projects/${data.project.id}` },
@@ -76,7 +77,7 @@ export function ActionsView({ data }: { data: ActionsData }) {
         }
       >
         <SubNav items={projectNav(data.project.id)} />
-      </PageHeader>
+      </PageHeader>}
       {data.groups.length === 0 ? (
         <EmptyState title="No proposed fixes" icon={<Wrench />}>
           Fixes appear here when the health engine proposes one for a finding.

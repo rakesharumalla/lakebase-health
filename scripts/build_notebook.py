@@ -28,7 +28,7 @@ from lakebase_health.config import EngineConfig  # noqa: E402
 from lakebase_health.exclusions import load_exclusions  # noqa: E402
 from lakebase_health.executors.api import API_CHECKS  # noqa: E402
 from lakebase_health.executors.delta import DeltaExecutor  # noqa: E402
-from lakebase_health.executors.postgres import SESSION_SETUP, STATS_WINDOW_SQL  # noqa: E402
+from lakebase_health.executors.postgres import QUERY_TAG, SESSION_SETUP, STATS_WINDOW_SQL  # noqa: E402
 from lakebase_health.fixer.allowlist import NotAllowed, parse  # noqa: E402
 from lakebase_health.jobs.run import CHECKS_DIR, service_roles  # noqa: E402
 
@@ -223,6 +223,7 @@ SERVICE_ROLES = __SERVICE_ROLES__
 EXCLUDED_ROLES = __EXCLUDED_ROLES__
 SESSION_SETUP = __SESSION_SETUP__
 STATS_WINDOW_SQL = __STATS_WINDOW_SQL__
+QUERY_TAG = __QUERY_TAG__
 
 w = WorkspaceClient()
 USER = w.current_user.me().user_name
@@ -327,7 +328,15 @@ def _pg_endpoint():
 def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, requires_extension=None, guards=()):
     """A Postgres check, read-only, on the chosen endpoint; in every database when per_database."""
     ep = _pg_endpoint()
-    host = w.postgres.get_endpoint(name=ep.name).status.hosts.host
+    status = w.postgres.get_endpoint(name=ep.name).status
+    host = status.hosts.host
+    if "{suspend_timeout_s}" in sql:  # the engine fills in the endpoint's suspend timeout (suspend_blockers)
+        t = getattr(status, "suspend_timeout_duration", None)
+        secs = int(t.total_seconds()) if hasattr(t, "total_seconds") else int(float(str(t or "0").rstrip("s")))
+        if secs <= 0:
+            print(f"{ep.name}: skipped, scale to zero is off")
+            return
+        sql = sql.replace("{suspend_timeout_s}", str(secs))
     branch = ep.name.split("/endpoints/")[0]
     dbs = [d.status.postgres_database for d in w.postgres.list_databases(parent=branch) if d.status]
     dbs = dbs if per_database else dbs[:1]
@@ -335,9 +344,10 @@ def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, req
     frames = []
     for db in dbs:
         token = w.postgres.generate_database_credential(endpoint=ep.name).token
-        # application_name as the engine's, so the query checks ignore this traffic like the engine's own
+        # The notebook's own application_name and the /* lakebase-health */ tag: the query checks ignore it
         with psycopg.connect(host=host, user=USER, password=token, dbname=db, sslmode="require", autocommit=True,
-                             application_name="lakebase-health", connect_timeout=10, prepare_threshold=None) as c:
+                             application_name="lakebase-health-notebook", connect_timeout=10,
+                             prepare_threshold=None) as c:
             for stmt in SESSION_SETUP:  # search_path, default_transaction_read_only = on, statement/lock timeouts
                 c.execute(stmt)
             if requires_extension and not c.execute(
@@ -347,7 +357,7 @@ def run_pg(sql, check_id, measure, thresholds, direction, per_database=True, req
             if guards:
                 print(f"{db}: stats window {c.execute(STATS_WINDOW_SQL).fetchone()[0]} h (confidence is low unless "
                       f"{', '.join(guards)})")
-            cur = c.execute(sql)
+            cur = c.execute(QUERY_TAG + sql)
             pdf = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
         if per_database and "object" in pdf.columns:
             pdf["object"] = db + ":" + pdf["object"].astype(str)  # the engine's object naming
@@ -478,7 +488,8 @@ def build(roles=(), engine_wheel=""):
     setup = (SETUP_PY.replace("__SERVICE_ROLES__", repr(tuple(roles)))
              .replace("__EXCLUDED_ROLES__", repr(tuple(excl.roles)))
              .replace("__SESSION_SETUP__", repr(tuple(SESSION_SETUP)))
-             .replace("__STATS_WINDOW_SQL__", repr(STATS_WINDOW_SQL)))
+             .replace("__STATS_WINDOW_SQL__", repr(STATS_WINDOW_SQL))
+             .replace("__QUERY_TAG__", repr(QUERY_TAG)))
     cells = [md_cell(header), INSTALL_PY.replace("__WHEEL__", repr(engine_wheel)), setup]
     for src, title in SOURCE_ORDER:
         group = [s for s in specs if s.source == src]

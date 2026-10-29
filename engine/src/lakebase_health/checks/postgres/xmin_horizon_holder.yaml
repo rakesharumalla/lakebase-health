@@ -1,6 +1,7 @@
 id: xmin_horizon_holder
 title: "Session holds back vacuum and freezing"
 category: maintenance
+area: vacuum_xid
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 50000000, critical: 200000000}

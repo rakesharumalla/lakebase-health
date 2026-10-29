@@ -5,7 +5,9 @@
     "target": "ES2020",
     "lib": ["ES2020"],
     "noEmit": true,
-    "rootDir": "./"
+    "rootDir": "./",
+    // The report components in client/src/report are rendered to static HTML on the server (the download)
+    "jsx": "react-jsx"
   },
   "include": ["server/**/*", "shared/**/*", "config/**/*"],
   "exclude": ["node_modules", "dist", "client"]

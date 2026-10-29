@@ -5,6 +5,7 @@ from pathlib import Path
 import yaml
 
 from .exclusions import KNOWN_TOKENS, Exclusions
+from .synced import SYNCED_TABLES_SQL
 
 SOURCES = {"delta", "postgres", "api"}
 SCHEDULES = {"every_run", "daily"}
@@ -12,6 +13,9 @@ SEVERITY_ORDER = ("info", "warning", "critical")
 FIX_KINDS = {"ddl", "setting", "rewrite", "hint", "manual"}
 ACTIONABLE_KINDS = {"ddl", "setting"}
 RISKS = {"safe", "moderate", "high"}
+# The health report's 12 scorecard areas, in report order (spec 2026-10-28 health report, section 5)
+AREAS = ("cache_memory", "storage_latency", "write_path", "connections", "locks", "vacuum_xid", "indexes",
+         "tables_bloat", "queries", "config_security", "scale_to_zero", "resilience")
 REPLICA_CHECKS = {"intersect"}
 PRECEDENCE_KEYS = ("object", "database", "endpoint")
 GUARD_RE = re.compile(r"^\s*([a-z_]+)\s*(>=|<=|>|<|==)\s*(-?[0-9.]+)\s*$")
@@ -65,6 +69,8 @@ class CheckSpec:
     superseded_by: SupersededBy | None = None  # not reported while one of these checks has an open finding
     query_scoped: bool = False  # reads per-query telemetry: platform roles are filtered out, evidence.queryid is a str
     fix: FixSpec | None = None
+    area: str | None = None  # health report scorecard area (AREAS); None only for the engine's meta checks
+    min_stats_hours: float | None = None  # counter-based postgres check: not run until stats are this old (h)
 
     def tables(self) -> set:
         return set(re.findall(r"system\.lakebase\.([a-z_]+)", self.sql or ""))
@@ -169,6 +175,13 @@ def parse_check(data: dict, stem: str | None = None, api_functions: frozenset = 
     query_scoped = data.get("query_scoped", False)
     if query_scoped not in (True, False) or (query_scoped and source != "delta"):
         errors.append("query_scoped must be true or false, and true only on a delta check")
+    min_stats_hours = data.get("min_stats_hours")
+    if min_stats_hours is not None and (source != "postgres" or isinstance(min_stats_hours, bool)
+                                        or not isinstance(min_stats_hours, (int, float)) or min_stats_hours <= 0):
+        errors.append("min_stats_hours must be a positive number, on a postgres check")
+    area = data.get("area")
+    if area is not None and area not in AREAS:
+        errors.append(f"area must be one of {list(AREAS)}")
     superseded_by = _parse_superseded_by(data.get("superseded_by"), data.get("id"), errors)
     fix = _parse_fix(data.get("fix"), errors)
     if errors:
@@ -179,7 +192,8 @@ def parse_check(data: dict, stem: str | None = None, api_functions: frozenset = 
                      schedule=schedule, guards=guards, requires_extension=data.get("requires_extension"),
                      replica_check=replica_check, per_database=per_database,
                      query_scoped=query_scoped, title_template=data.get("title_template"),
-                     superseded_by=superseded_by, fix=fix)
+                     superseded_by=superseded_by, fix=fix, area=area,
+                     min_stats_hours=float(min_stats_hours) if min_stats_hours is not None else None)
 
 
 def load_checks(directory: Path, api_functions: frozenset) -> list:
@@ -196,11 +210,16 @@ def load_checks(directory: Path, api_functions: frozenset) -> list:
     return specs
 
 
-def render_sql(spec: CheckSpec, excl: Exclusions) -> str:
-    out = spec.sql or ""
+def render_text(text: str, excl: Exclusions) -> str:
+    """Fill the {excluded_*} and {synced_tables} tokens of any engine SQL (checks and inventory queries)."""
+    out = text
     for name, value in excl.tokens().items():
         out = out.replace("{" + name + "}", value)
-    return out
+    return out.replace("{synced_tables}", SYNCED_TABLES_SQL)
+
+
+def render_sql(spec: CheckSpec, excl: Exclusions) -> str:
+    return render_text(spec.sql or "", excl)
 
 
 _CREATE_INDEX = re.compile(r"^(\s*CREATE\s+(?:UNIQUE\s+)?INDEX)\s+(?!CONCURRENTLY\b)", re.I)

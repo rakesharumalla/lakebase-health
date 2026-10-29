@@ -1,6 +1,7 @@
 id: non_ssl_sessions
 title: "Client sessions without SSL"
 category: security
+area: config_security
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 0, critical: 10}

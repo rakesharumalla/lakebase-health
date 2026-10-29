@@ -2,6 +2,7 @@ id: row_misestimate
 title: "Planner row estimates are far off"
 title_template: "Row estimates far off for {queries} queries"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 # One finding per endpoint. measure = share (%) of the endpoint's 24 h DB time (pg_stat_statements total_exec_time,

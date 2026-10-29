@@ -1,6 +1,7 @@
 id: autovacuum_scale_factor
 title: "Large table needs per-table autovacuum tuning"
 category: maintenance
+area: vacuum_xid
 source: postgres
 thresholds: {warning: 10, critical: 30}
 explain: >

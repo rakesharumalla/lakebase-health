@@ -1,6 +1,7 @@
 id: redundant_index
 title: "Index covered by a wider index"
 category: indexing
+area: indexes
 source: postgres
 thresholds: {warning: 0, critical: 1073741824}
 explain: >
@@ -15,7 +16,8 @@ sql: |
   JOIN pg_index b ON a.indrelid = b.indrelid AND a.indexrelid <> b.indexrelid
   JOIN pg_class ca ON ca.oid = a.indexrelid JOIN pg_namespace na ON na.oid = ca.relnamespace
   JOIN pg_class cb ON cb.oid = b.indexrelid JOIN pg_namespace nb ON nb.oid = cb.relnamespace
-  WHERE ca.relam = cb.relam AND NOT a.indisunique AND NOT a.indisprimary AND b.indisvalid
+  LEFT JOIN {synced_tables} st ON st.relid = a.indrelid  -- the sync owns indexes on synced storage
+  WHERE st.relid IS NULL AND ca.relam = cb.relam AND NOT a.indisunique AND NOT a.indisprimary AND b.indisvalid
     AND a.indpred IS NULL AND b.indpred IS NULL AND a.indexprs IS NULL AND b.indexprs IS NULL
     AND b.indkey::text LIKE a.indkey::text || ' %'
     AND na.nspname NOT IN {excluded_schemas}

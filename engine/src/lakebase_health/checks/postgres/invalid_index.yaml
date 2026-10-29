@@ -1,6 +1,7 @@
 id: invalid_index
 title: "Invalid index left by a failed build"
 category: indexing
+area: indexes
 source: postgres
 thresholds: {warning: 0}
 explain: >

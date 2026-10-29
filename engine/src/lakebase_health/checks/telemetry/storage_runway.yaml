@@ -1,6 +1,7 @@
 id: storage_runway
 title: "Storage projected to fill soon"
 category: forecast
+area: resilience
 source: delta
 direction: below
 thresholds: {warning: 90, critical: 30}

@@ -1,7 +1,9 @@
 id: unused_index
 title: "Index never used"
 category: indexing
+area: indexes
 source: postgres
+min_stats_hours: 24   # counter-based: not run until stats_reset / postmaster start is 24 h old
 replica_check: intersect
 guards: ["stats_window_hours >= 24"]
 superseded_by:   # same index, same DROP; the duplicate/redundant finding also names the index that stays
@@ -13,13 +15,15 @@ explain: >
   and on every read replica of the branch (usage counters are per compute, so an index can serve only replica
   reads). It costs writes and storage. Confidence is low when a replica could not be read or its counters were
   reset recently; only trust this when the statistics window covers a full business cycle.
+  Not run until the statistics are 24 h old (stats reset or compute start).
 sql: |
   SELECT quote_ident(s.schemaname) || '.' || quote_ident(s.indexrelname) AS object,
          quote_ident(s.schemaname) || '.' || quote_ident(s.indexrelname) AS index_ident,
          s.relname AS table_name, s.idx_scan, pg_relation_size(s.indexrelid)::float8 AS measure,
          pg_get_indexdef(s.indexrelid) AS index_def
   FROM pg_stat_user_indexes s JOIN pg_index i ON i.indexrelid = s.indexrelid
-  WHERE s.idx_scan = 0 AND NOT i.indisunique AND NOT i.indisprimary AND i.indisvalid
+  LEFT JOIN {synced_tables} st ON st.relid = s.relid  -- synced storage: synced_index_review instead
+  WHERE st.relid IS NULL AND s.idx_scan = 0 AND NOT i.indisunique AND NOT i.indisprimary AND i.indisvalid
     AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = s.indexrelid)
     AND s.schemaname NOT IN {excluded_schemas}
 fix:

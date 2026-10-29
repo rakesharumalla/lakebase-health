@@ -1,6 +1,7 @@
 id: config_drift
 title: "Role or database setting override"
 category: config
+area: config_security
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {info: 0}

@@ -1,6 +1,7 @@
 id: missing_fk_index
 title: "Foreign key without a supporting index"
 category: indexing
+area: indexes
 source: postgres
 thresholds: {warning: 0, critical: 1073741824}
 explain: >

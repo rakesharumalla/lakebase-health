@@ -1,7 +1,9 @@
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace as NS
 
 from lakebase_health.config import EngineConfig
+from lakebase_health.jobs import run as run_mod
 from lakebase_health.jobs.run import run_engine
 from tests.fakes import FakeSql
 
@@ -227,3 +229,38 @@ def test_every_run_stores_query_texts_and_their_failure_is_not_fatal(tmp_path, m
     run = run_engine(FakeSql(), fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW,
                      checks_dir=tmp_path, skip_ingest=True)
     assert run["status"] == "ok_with_errors" and "query_texts: RuntimeError: boom" in run["errors"]
+
+
+def test_the_inventory_snapshot_is_taken_before_the_checks(tmp_path, monkeypatch):
+    write_check(tmp_path)
+    order = []
+    monkeypatch.setattr("lakebase_health.jobs.run.collect_inventory",
+                        lambda *a, **k: order.append("inventory") or {"endpoints": 2, "skipped": 0})
+    real_run = run_mod.Runner.run
+    monkeypatch.setattr(run_mod.Runner, "run", lambda self, *a: order.append("checks") or real_run(self, *a))
+    sql = FakeSql(responses=[(r"SELECT max\(ts\) AS max_ts", [{"max_ts": NOW, "n": 1}])])
+    run = run_engine(sql, fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW,
+                     checks_dir=tmp_path)
+    assert order == ["inventory", "checks"]
+    assert json.loads(run["counts"])["inventory_endpoints"] == 2 and "pg_inventory" in json.loads(run["step_seconds"])
+
+
+def test_an_inventory_failure_is_reported_and_the_checks_still_run(tmp_path, monkeypatch):
+    write_check(tmp_path)
+    def boom(*a, **k):
+        raise RuntimeError("warehouse gone")
+    monkeypatch.setattr("lakebase_health.jobs.run.collect_inventory", boom)
+    sql = FakeSql(responses=[(r"SELECT max\(ts\) AS max_ts", [{"max_ts": NOW, "n": 1}]),
+                             (r"raw_compute_gauges$", [{"project_id": "p", "branch_id": "b", "endpoint_id": "e",
+                                                        "object": "o", "measure": 1.0}])])
+    run = run_engine(sql, fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW,
+                     checks_dir=tmp_path)
+    assert run["status"] == "ok_with_errors" and "pg inventory: RuntimeError: warehouse gone" in run["errors"]
+    assert sql.tables["cat.lakebase_health.findings"][0]["check_id"] == "x"
+
+
+def test_old_inventory_snapshots_are_deleted_each_run(tmp_path):
+    write_check(tmp_path)
+    sql = FakeSql(responses=[(r"SELECT max\(ts\) AS max_ts", [{"max_ts": NOW, "n": 1}])])
+    run_engine(sql, fake_w(), EngineConfig(catalog="cat"), connect=lambda **k: None, now=NOW, checks_dir=tmp_path)
+    assert len(sql.ran(r"DELETE FROM cat\.lakebase_health\.inventory_\w+ WHERE collected_at < :cutoff")) == 7

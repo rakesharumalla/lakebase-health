@@ -1,6 +1,7 @@
 id: query_regression
 title: "Query got slower than its baseline"
 category: performance
+area: queries
 source: delta
 query_scoped: true   # platform roles filtered out; see exclusions.yaml
 thresholds: {warning: 1.5, critical: 2}

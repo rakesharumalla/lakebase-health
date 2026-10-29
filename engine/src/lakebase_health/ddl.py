@@ -1,3 +1,5 @@
+_INV = "run_id STRING, collected_at TIMESTAMP, project_id STRING, branch_id STRING, endpoint_id STRING, "
+
 TABLE_DDL = {
     "runs": "run_id STRING, started_at TIMESTAMP, ended_at TIMESTAMP, status STRING, step_seconds STRING, "
             "counts STRING, errors STRING",
@@ -30,6 +32,34 @@ TABLE_DDL = {
     "action_runs": "run_id STRING, approval_id STRING, action_id STRING, kind STRING, started_at TIMESTAMP, "
                    "ended_at TIMESTAMP, outcome STRING, report STRING, branch STRING, error STRING",
     "metrics_daily": "day DATE, project_id STRING, endpoint_id STRING, metric STRING, value DOUBLE",
+    # Health report inventory: one snapshot per endpoint per analysis run (pg_inventory.py), kept 7 days
+    "inventory_tables": _INV + "datname STRING, schema_name STRING, table_name STRING, synced_table STRING, "
+                        "total_bytes BIGINT, data_bytes BIGINT, index_bytes BIGINT, toast_bytes BIGINT, "
+                        "n_live_tup BIGINT, n_dead_tup BIGINT, seq_scan BIGINT, idx_scan BIGINT, "
+                        "heap_blks_read BIGINT, heap_blks_hit BIGINT, last_vacuum TIMESTAMP, "
+                        "last_autovacuum TIMESTAMP, last_analyze TIMESTAMP, last_autoanalyze TIMESTAMP, "
+                        "vacuum_count BIGINT, autovacuum_count BIGINT, analyze_count BIGINT, "
+                        "autoanalyze_count BIGINT, vacuum_threshold DOUBLE, xid_age BIGINT, "
+                        "autovacuum_overrides STRING",
+    "inventory_indexes": _INV + "datname STRING, schema_name STRING, table_name STRING, index_name STRING, "
+                         "method STRING, index_bytes BIGINT, idx_scan BIGINT, is_valid BOOLEAN, is_primary BOOLEAN, "
+                         "is_unique BOOLEAN, synced_table STRING, parent_index STRING",
+    "inventory_settings": _INV + "name STRING, setting STRING, unit STRING, source STRING, context STRING, "
+                          "how_to_change STRING",
+    "inventory_statements": _INV + "ranking STRING, rank INT, queryid STRING, role STRING, datname STRING, "
+                            "calls BIGINT, mean_ms DOUBLE, total_ms DOUBLE, shared_blks_hit BIGINT, "
+                            "shared_blks_read BIGINT, temp_blks_written BIGINT",
+    "inventory_io": _INV + "backend_type STRING, object STRING, context STRING, reads BIGINT, writes BIGINT, "
+                    "extends BIGINT, hits BIGINT, evictions BIGINT, reuses BIGINT, fsyncs BIGINT, read_time DOUBLE, "
+                    "write_time DOUBLE, stats_reset TIMESTAMP",
+    "inventory_activity": _INV + "datname STRING, schema_name STRING, table_name STRING, synced_table STRING, "
+                          "n_live_tup BIGINT, n_tup_ins BIGINT, n_tup_upd BIGINT, n_tup_del BIGINT, seq_scan BIGINT, "
+                          "idx_scan BIGINT, ins_delta BIGINT, upd_delta BIGINT, del_delta BIGINT, seq_delta BIGINT, "
+                          "idx_delta BIGINT, window_s DOUBLE, relid BIGINT",
+    "inventory_endpoint": _INV + "metric STRING, dims STRING, value DOUBLE, note STRING",
+    # The app's report exports (its only write besides approvals)
+    "audit_events": "event_id STRING, ts TIMESTAMP, actor STRING, action STRING, project_id STRING, "
+                    "branch_id STRING, detail STRING",
     # LLM query rewrites: one row per attempt, one per model call (hashes and token counts only), endpoint set-up
     "drafts": "draft_id STRING, finding_fingerprint STRING, attempt INT, action_id STRING, approval_id STRING, "
               "endpoint STRING, prompt_version STRING, context_hash STRING, rationale STRING, "
@@ -49,6 +79,7 @@ ADDED_COLUMNS = {
     "findings": ("rollback_note STRING",),
     "proposed_actions": ("rollback_note STRING", "origin STRING", "draft_id STRING"),
     "approvals": ("fingerprint STRING",),
+    "inventory_activity": ("relid BIGINT",),
 }
 
 MASKED_COLUMNS = {

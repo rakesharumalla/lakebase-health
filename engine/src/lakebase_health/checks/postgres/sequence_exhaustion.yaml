@@ -1,6 +1,7 @@
 id: sequence_exhaustion
 title: "Sequence or identity column nearing its limit"
 category: forecast
+area: tables_bloat
 source: postgres
 thresholds: {warning: 50, critical: 75}
 explain: >

@@ -100,7 +100,7 @@ approved.
 |---|---|---|---|
 | Engine SP (`engine_sp`) | Engine and analysis jobs | Read `system.lakebase`. Create and own `<catalog>.lakebase_health` (tables, the `mask_text` function, column masks). List the Lakebase projects it has `CAN_USE` on. Connect to enrolled branches as a role with only `pg_monitor`, in sessions with `default_transaction_read_only`, `statement_timeout = 30s` and `lock_timeout = 1s`. | Write to any Postgres database (it has no table, schema or database privileges). Wake a suspended compute. Create branches. Approve or apply fixes. |
 | Fixer SP (`fixer_sp`) | Fixer job | `SELECT` on `<catalog>.lakebase_health`; `MODIFY` on `proposed_actions`, `action_runs`, `ledger`, `shadow_log`, `drafts`, `llm_calls` and `llm_status` only. `CAN_QUERY` on the rewrite model endpoint. Create and delete `lbh-verify-*` branches on projects where it has `CAN_MANAGE`. Run approved statements as a member of the role that owns the target tables. | Run anything outside its allowlist: `CREATE INDEX CONCURRENTLY` (non-unique), `DROP INDEX CONCURRENTLY`, `ANALYZE <table>`, `ALTER TABLE <table> SET\|RESET (autovacuum_*)`, one statement on one object, no comments or literals. Act without an approval row whose SQL hash matches. Write `findings` or `approvals`. Touch a project where it has no Postgres role. |
-| App SP (created by Databricks Apps) | The app | `SELECT` on `<catalog>.lakebase_health`. `MODIFY` on `approvals` (Unity Catalog has no insert-only privilege; every consumed approval is recorded in the hash-chained ledger). `CAN_MANAGE_RUN` on the fixer job. `CAN_USE` on the SQL warehouse. | Connect to Postgres, hold Lakebase project permissions, or write any other table. Per-user checks (project visibility, approver rights, group membership) use the signed-in user's token and GET calls only. |
+| App SP (created by Databricks Apps) | The app | `SELECT` on `<catalog>.lakebase_health`. `MODIFY` on `approvals` (Unity Catalog has no insert-only privilege; every consumed approval is recorded in the hash-chained ledger) and on `audit_events` (one row per report download). `CAN_MANAGE_RUN` on the fixer job. `CAN_USE` on the SQL warehouse. | Connect to Postgres, hold Lakebase project permissions, or write any other table. Per-user checks (project visibility, approver rights, group membership) use the signed-in user's token and GET calls only. |
 
 `CAN_MANAGE` on a project is broader than what the fixer uses (the code only creates and deletes `lbh-verify-*`
 branches), but creating a branch requires it; `CAN_USE` is rejected.
@@ -118,7 +118,7 @@ Least-privilege grants, all applied in [Setup](#setup):
 | Fixer SP | `CAN_QUERY` on `llm_endpoint` (when the endpoint has a permissions object) | Endpoint manager (`scripts/fixer_grants.sh`) |
 | Fixer SP | `CAN_MANAGE` on the project, and a Postgres role that is a member of the table-owner role and of `pg_monitor` (for other roles' statements in `pg_stat_statements`), per project (optional) | Project owner |
 | App SP | `USE CATALOG`; `USE SCHEMA` and `SELECT` on the schema | Catalog owner |
-| App SP | `MODIFY` on `approvals`; `CAN_MANAGE_RUN` on the fixer job | Catalog owner (`scripts/fixer_grants.sh`) |
+| App SP | `MODIFY` on `approvals` and `audit_events`; `CAN_MANAGE_RUN` on the fixer job | Catalog owner (`scripts/fixer_grants.sh`) |
 | App SP | Member of the account group `databricks_pii_access` (only when PII masking is on, so the app can show query text) | Account admin |
 
 ## Prerequisites
@@ -315,6 +315,20 @@ PROFILE=<profile> EP=projects/<project-id>/branches/<branch-id>/endpoints/<endpo
 The app's **Postgres checks** column turns **on** once the role exists, at the next analysis run. The engine only
 connects to computes that are already running.
 
+With the role, each analysis run also takes the health report's inventory snapshot (largest tables, indexes,
+settings, top statements by query ID, `pg_stat_io`, autovacuum workers, idle clients). When the `neon` extension is
+installed, `pg_monitor` can already run `neon_get_lfc_stats()`, `approximate_working_set_size_seconds()`,
+`backpressure_throttling_time()` and `backpressure_lsns()`, and the engine reads them. Optional: the System tab's
+endpoint-level getpage p99 (all page reads, not only sampled queries) needs `neon_perf_counters`, which `pg_monitor`
+cannot read. Grant it, connected as the branch owner:
+
+```sql
+GRANT SELECT ON neon_perf_counters, neon_lfc_stats TO "<engine-sp-application-id>";
+```
+
+Without it the System tab says "not available: no SELECT on neon_perf_counters" and uses sampled queries. The engine
+never runs `CREATE EXTENSION` or `GRANT` itself.
+
 ### 7. Enroll a project for fixes
 
 Optional, per project. The fixer needs three things on the project.
@@ -419,7 +433,8 @@ each user sees with their own token:
 | View | Path | What it shows |
 |---|---|---|
 | Fleet | `/` | Every project you can see: open critical, warning and info counts, newest finding, active computes, and whether Postgres checks are on. Fleet totals and the last engine run. |
-| Project | `/projects/<id>` | Open findings grouped by category, with severity, object, first and last seen, occurrences and confidence. Query findings show one row per query, with a badge per issue. Findings resolved in the last 7 days, collapsed. A computes panel: state, CU range, suspend timeout, HA, restore window, branch protection and **Postgres checks on/off**, with the grant to run when off. |
+| Health report | `/projects/<id>/branches/<branch>/<tab>` | The project page, one branch at a time (default branch first; a picker lists the others). A header with the computes, Postgres version, data time, score, grade, "assessed N of 12", banners and **Download report**, then 11 tabs: Health (scorecard of 12 areas, where to focus, critical items and warnings), Overview, Tables & Indexes, Queries, Waits & Locks, Vacuum & Bloat, Scale to zero, System (24 h charts, `pg_stat_io`), Settings, Runbook (ordered actions with SQL) and Fixes. Every tab starts with KPI tiles; every card says in one line what it shows. `/projects/<id>` opens the default branch's Health tab. |
+| Report download | `/api/report/<project uid>/<branch>.html` | One self-contained HTML file (inline CSS and SVG, no scripts, no external requests; print it to PDF from the browser) with the Health, Overview, Tables & Indexes, Queries, Vacuum & Bloat, Scale to zero, System, Settings and Runbook tabs. It never contains query text, whoever downloads it, and each download writes an `audit_events` row. |
 | Finding | `/findings/<fingerprint>` | What it means, the measure over time, the evidence, the candidate fix and rollback, the shadow-mode verdict (what an unattended policy would have done) and related findings on the same endpoint. Incident findings link to the timeline. |
 | Timeline | `/endpoints/<id>/timeline` | One endpoint, up to 7 days on one time axis: active sessions by wait class, lock waits by blocker (commit wait, idle in transaction, active, not sampled), `SyncRep` commit waits, CPU and connections, and statement timeouts, connection drops and restarts as events. Click a moment to list the sampled sessions. |
 | Fixes and approvals | `/projects/<id>/actions` | Every proposed fix for the project, grouped by state, each with its card. |
@@ -543,6 +558,11 @@ Lakebase platform objects never produce findings (`engine/src/lakebase_health/ch
 - Platform settings (`databricks.*`, `neon.*`, `neon_*`, `neon_monitor.*`, `compute_ctl.*`, `lakebase.*`).
 - Query checks also drop the telemetry of synced-table writers (`databricks_writer_<n>`), platform agents, and the
   engine and fixer SPs and their application names (`lakebase-health`, `lakebase-health-fixer`).
+- Monitoring tools' own queries, whoever runs them: application names `pg_sage` and `lakebase-health-notebook`, and
+  any statement whose text **starts** with `/* pg_sage */` or `/* lakebase-health */`. The engine, fixer and
+  notebook tag every statement that way. For ad-hoc diagnostics in psql, start the query with
+  `/* lakebase-health */` or connect with `PGAPPNAME=lakebase-health-notebook scripts/pg.sh`. A tag elsewhere in the
+  text does not count, and a customer running the same statement under another role keeps it.
 
 To opt a project out, add the custom tag `lakebase_health = off` to it. API and Postgres checks then skip it
 (`skipped:opted_out`). Telemetry checks still cover it, because they run over the account-wide copy.
@@ -632,7 +652,7 @@ python3 scripts/gen_checks_doc.py --check   # exits 1 if the docs are out of dat
 
 <!-- CHECKS_START: generated by scripts/gen_checks_doc.py; do not edit by hand -->
 
-64 checks. Full explanations, thresholds and fixes: [docs/CHECKS.md](docs/CHECKS.md).
+70 checks. Full explanations, thresholds and fixes: [docs/CHECKS.md](docs/CHECKS.md).
 
 | Area | Check | What it finds | Source | Severities | Fixer |
 |---|---|---|---|---|---|
@@ -649,6 +669,7 @@ python3 scripts/gen_checks_doc.py --check   # exits 1 if the docs are out of dat
 |  | [`idle_in_transaction`](docs/CHECKS.md#idle_in_transaction) | Session idle inside an open transaction | postgres | warning / critical | - |
 |  | [`long_transaction`](docs/CHECKS.md#long_transaction) | Long-running transaction | postgres | warning / critical | - |
 | performance | [`disk_spill`](docs/CHECKS.md#disk_spill) | Query spills sorts or hashes to disk | telemetry | warning / critical | by hand |
+|  | [`getpage_latency_spike`](docs/CHECKS.md#getpage_latency_spike) | Storage read latency spiked | telemetry | info / warning | - |
 |  | [`plan_flip`](docs/CHECKS.md#plan_flip) | Query switches between fast and slow plans | telemetry | warning / critical | - |
 |  | [`query_regression`](docs/CHECKS.md#query_regression) | Query got slower than its baseline | telemetry | warning / critical | - |
 |  | [`row_misestimate`](docs/CHECKS.md#row_misestimate) | Planner row estimates are far off | telemetry | info / warning / critical | - |
@@ -672,8 +693,10 @@ python3 scripts/gen_checks_doc.py --check   # exits 1 if the docs are out of dat
 |  | [`oversized_search_index`](docs/CHECKS.md#oversized_search_index) | Large GIN/GiST search index | postgres | warning / critical | - |
 |  | [`redundant_index`](docs/CHECKS.md#redundant_index) | Index covered by a wider index | postgres | warning / critical | verify + apply |
 |  | [`seq_scan_heavy`](docs/CHECKS.md#seq_scan_heavy) | Table read mostly by large sequential scans | postgres | warning / critical | - |
+|  | [`synced_index_review`](docs/CHECKS.md#synced_index_review) | Index on a synced table to review | postgres | info | - |
 |  | [`unused_index`](docs/CHECKS.md#unused_index) | Index never used | postgres | info / warning / critical | verify + apply |
-| maintenance | [`xid_runway`](docs/CHECKS.md#xid_runway) | Transaction ID age is high | telemetry | warning / critical | - |
+| maintenance | [`autovacuum_saturation`](docs/CHECKS.md#autovacuum_saturation) | Every autovacuum worker busy while a table waits | telemetry | warning | apply |
+|  | [`xid_runway`](docs/CHECKS.md#xid_runway) | Transaction ID age is high | telemetry | warning / critical | - |
 |  | [`autovacuum_blocker`](docs/CHECKS.md#autovacuum_blocker) | Dead tuples pile up because something blocks vacuum | postgres | warning / critical | - |
 |  | [`autovacuum_disabled`](docs/CHECKS.md#autovacuum_disabled) | Autovacuum disabled on a table | postgres | warning | apply |
 |  | [`autovacuum_scale_factor`](docs/CHECKS.md#autovacuum_scale_factor) | Large table needs per-table autovacuum tuning | postgres | warning / critical | apply |
@@ -688,7 +711,10 @@ python3 scripts/gen_checks_doc.py --check   # exits 1 if the docs are out of dat
 | replication | [`replica_lag`](docs/CHECKS.md#replica_lag) | Read replica lags behind the primary | telemetry | warning / critical | - |
 |  | [`replication_slot_retention`](docs/CHECKS.md#replication_slot_retention) | Inactive replication slot retains WAL | postgres | warning / critical | - |
 | connectivity | [`connection_drops`](docs/CHECKS.md#connection_drops) | Client connections dropped (SSL EOF, resets) | telemetry | info / warning / critical | - |
+|  | [`suspend_blockers`](docs/CHECKS.md#suspend_blockers) | Idle clients keep the compute from scaling to zero | postgres | warning | - |
 | throughput | [`rollback_ratio`](docs/CHECKS.md#rollback_ratio) | High transaction rollback ratio | telemetry | warning / critical | - |
+|  | [`synced_full_refresh`](docs/CHECKS.md#synced_full_refresh) | Synced table fully refreshed | telemetry | info / warning | - |
+|  | [`wal_burst`](docs/CHECKS.md#wal_burst) | Bursts of WAL far above the usual rate | telemetry | info / warning | - |
 | config | [`config_drift`](docs/CHECKS.md#config_drift) | Role or database setting override | postgres | info | - |
 |  | [`guardrail_settings`](docs/CHECKS.md#guardrail_settings) | Guardrail setting missing or too loose | postgres | info / warning | by hand |
 | schema | [`table_without_pk`](docs/CHECKS.md#table_without_pk) | Table without a primary key | postgres | info / warning | - |

@@ -1,6 +1,7 @@
 id: blocked_session
 title: "Session blocked by another session"
 category: incidents
+area: locks
 source: postgres
 per_database: false   # instance-wide catalog: one result per endpoint, not one per database
 thresholds: {warning: 60, critical: 300}

@@ -10,7 +10,7 @@ import { cn } from "./lib/utils";
 import ActionsPage from "./views/Actions";
 import FleetPage from "./views/Fleet";
 import FindingPage from "./views/Finding";
-import ProjectPage from "./views/Project";
+import ReportPage from "./views/Report";
 import TimelinePage from "./views/Timeline";
 
 function Freshness({ meta }: { meta: Meta | undefined }) {
@@ -87,7 +87,10 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: "/", element: <FleetPage /> },
-      { path: "/projects/:id", element: <ProjectPage /> },
+      // The project page is the health report, one tab per URL: /projects/:id/branches/:branch/:tab
+      { path: "/projects/:id", element: <ReportPage /> },
+      { path: "/projects/:id/branches/:branch", element: <ReportPage /> },
+      { path: "/projects/:id/branches/:branch/:tab", element: <ReportPage /> },
       { path: "/projects/:id/actions", element: <ActionsPage /> },
       { path: "/findings/:fp", element: <FindingPage /> },
       { path: "/endpoints/:id/timeline", element: <TimelinePage /> },

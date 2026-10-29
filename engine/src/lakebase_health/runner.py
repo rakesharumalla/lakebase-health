@@ -4,6 +4,7 @@ from .checkspec import parse_check, render_sql, render_template, template_values
 from .fingerprint import fingerprint
 from .models import FLEET, CheckOutcome, CheckResult
 from .severity import classify, guards_pass
+from .synced import annotate, synced_map
 
 DAILY_INTERVAL = timedelta(hours=23)
 _LOCATION = ("project_id", "branch_id", "endpoint_id", "object", "query_text")
@@ -28,6 +29,23 @@ META_SPECS = {
 
 
 INACTIVE = "skipped:compute_inactive"
+STATS_YOUNG = "skipped:stats_young"
+SCALE_TO_ZERO_OFF = "skipped:scale_to_zero_off"
+SUSPEND_TOKEN = "{suspend_timeout_s}"  # filled in per endpoint from the inventory (suspend_blockers)
+
+
+def endpoint_sql(sql: str, ep) -> str:
+    return sql.replace(SUSPEND_TOKEN, str(int(ep.suspend_timeout_s or 0)))
+
+
+def _stats_young(spec, ctx) -> str | None:
+    """Why a counter-based check must not run yet (spec min_stats_hours), or None when its counters are old enough."""
+    if not spec.min_stats_hours:
+        return None
+    h = ctx.get("stats_window_hours")
+    if h is None:
+        return "counters too young (reset time unknown)"
+    return f"counters too young (reset {h:.0f} h ago)" if h < spec.min_stats_hours else None
 
 
 class _Suspended(Exception):
@@ -162,6 +180,7 @@ class Runner:
             try:
                 with self.postgres.session(ep, db) as session:
                     ctx = {"stats_window_hours": session.stats_window_hours()}
+                    synced = synced_map(session)
                     for spec in specs:
                         o = acc[spec.id]
                         if o.status != "ok":
@@ -171,13 +190,20 @@ class Runner:
                         if not self._due(spec, now, last_ok):
                             o.status = "skipped:not_scheduled"
                             continue
+                        young = _stats_young(spec, ctx)
+                        if young:  # one young database skips the endpoint: partial results would resolve the rest
+                            o.status, o.error, o.results = STATS_YOUNG, young, []
+                            continue
+                        if SUSPEND_TOKEN in (spec.sql or "") and not (ep.suspend_timeout_s or 0) > 0:
+                            o.status = SCALE_TO_ZERO_OFF
+                            continue
                         if spec.requires_extension and not session.has_extension(spec.requires_extension):
                             o.status = "skipped:extension_missing"
                             missing.append({"object": f"{spec.requires_extension}", "measure": 1.0,
                                             "extension": spec.requires_extension, "needed_by": spec.id, "db": db})
                             continue
                         try:
-                            rows = session.query(render_sql(spec, self.excl))
+                            rows = annotate(session.query(endpoint_sql(render_sql(spec, self.excl), ep)), synced)
                             prefix = f"{db}:" if spec.per_database else ""
                             o.results.extend(self._results(spec, rows, loc, prefix, ctx))
                             ran_once.add(spec.id)

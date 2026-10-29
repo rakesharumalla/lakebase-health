@@ -1,6 +1,7 @@
 id: oversized_search_index
 title: "Large GIN/GiST search index"
 category: indexing
+area: indexes
 source: postgres
 thresholds: {warning: 1073741824, critical: 10737418240}
 explain: >

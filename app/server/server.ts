@@ -25,6 +25,8 @@ createApp({
     const runner = createRunner(loadQueries(join(process.cwd(), "server", "queries"), catalog), exec);
     const http = userHttp(host.startsWith("http") ? host : `https://${host}`);
     const insert = createWriter(join(process.cwd(), "server", "writes", "insert_approval.sql"), catalog, exec);
+    // Runs as the app service principal: MODIFY on audit_events (scripts/fixer_grants.sh)
+    const insertAudit = createWriter(join(process.cwd(), "server", "writes", "insert_audit.sql"), catalog, exec);
     const fixerJobId = Number(process.env.FIXER_JOB_ID ?? "");
     const approvals: Approvals = {
       // The approver check uses the caller's own token, GET-only: project owner, or able to read the project ACL.
@@ -55,6 +57,7 @@ createApp({
       runner,
       scheduleMinutes: Number(process.env.SCHEDULE_MINUTES ?? "60"),
       approvals,
+      audit: { insert: insertAudit, newId: () => randomUUID().replace(/-/g, "") },
       llm: {
         enabled: process.env.LLM_ENABLED?.trim().toLowerCase() !== "false",
         endpoint: process.env.LLM_ENDPOINT ?? "databricks-claude-opus-5-5",

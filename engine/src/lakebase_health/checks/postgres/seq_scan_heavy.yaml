@@ -1,12 +1,15 @@
 id: seq_scan_heavy
 title: "Table read mostly by large sequential scans"
 category: indexing
+area: indexes
 source: postgres
+min_stats_hours: 24   # counter-based: not run until stats_reset / postmaster start is 24 h old
 guards: ["stats_window_hours >= 24"]
 thresholds: {warning: 10000, critical: 1000000}
 explain: >
   Average rows read per sequential scan on a table with more than 10k live rows. Find the queries scanning it
   (top_db_time_query) and index their filter and join columns; verify the index on a branch.
+  Not run until the statistics are 24 h old (stats reset or compute start).
 sql: |
   SELECT quote_ident(schemaname) || '.' || quote_ident(relname) AS object, seq_scan, idx_scan, n_live_tup,
          seq_tup_read, (seq_tup_read::float8 / NULLIF(seq_scan, 0)) AS measure,

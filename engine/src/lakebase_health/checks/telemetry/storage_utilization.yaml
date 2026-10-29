@@ -1,6 +1,7 @@
 id: storage_utilization
 title: "Storage near its limit"
 category: capacity
+area: resilience
 source: delta
 thresholds: {warning: 70, critical: 85}
 explain: >

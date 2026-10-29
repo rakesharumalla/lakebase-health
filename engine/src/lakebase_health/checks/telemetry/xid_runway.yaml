@@ -1,6 +1,7 @@
 id: xid_runway
 title: "Transaction ID age is high"
 category: maintenance
+area: vacuum_xid
 source: delta
 superseded_by:   # database xid age is the oldest table's age; xid_age_table names the table and the VACUUM FREEZE fix
   key: database

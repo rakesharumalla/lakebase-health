@@ -1,0 +1,57 @@
+id: autovacuum_saturation
+title: "Every autovacuum worker busy while a table waits"
+category: maintenance
+area: vacuum_xid
+source: delta
+thresholds: {warning: 1}
+explain: >
+  All autovacuum workers were busy in the last 3 inventory snapshots (one per analysis run) while this table has
+  stayed over its vacuum threshold (dead tuples > threshold + scale factor x rows) for more than an hour (measure =
+  hours). Vacuum cannot keep up. Let the workers go faster on this table (per-table autovacuum_vacuum_cost_limit,
+  the fix below), vacuum it by hand in a quiet period, or reduce dead tuples at the source (fewer UPDATEs of
+  indexed columns, batched deletes). autovacuum_max_workers is support-managed.
+sql: |
+  WITH snap AS (
+    SELECT project_id, branch_id, endpoint_id, collected_at,
+           max(CASE WHEN metric = 'autovacuum_workers_busy' THEN value END) AS busy,
+           max(CASE WHEN metric = 'autovacuum_max_workers' THEN value END) AS max_workers
+    FROM lakebase_health.inventory_endpoint
+    WHERE collected_at >= current_timestamp() - INTERVAL 3 HOURS
+      AND metric IN ('autovacuum_workers_busy', 'autovacuum_max_workers')
+    GROUP BY project_id, branch_id, endpoint_id, collected_at),
+  last3 AS (
+    SELECT * FROM snap QUALIFY row_number() OVER (PARTITION BY endpoint_id ORDER BY collected_at DESC) <= 3),
+  saturated AS (
+    SELECT project_id, branch_id, endpoint_id, max(busy) AS busy_workers, max(max_workers) AS max_workers,
+           max(collected_at) AS latest
+    FROM last3 GROUP BY project_id, branch_id, endpoint_id
+    HAVING count(*) = 3 AND min(CASE WHEN busy >= max_workers AND max_workers > 0 THEN 1 ELSE 0 END) = 1),
+  tbl AS (
+    SELECT endpoint_id, datname, schema_name, table_name, collected_at, n_dead_tup, vacuum_threshold,
+           n_dead_tup > vacuum_threshold AS over_threshold
+    FROM lakebase_health.inventory_tables WHERE collected_at >= current_timestamp() - INTERVAL 3 HOURS),
+  runs AS (
+    SELECT endpoint_id, datname, schema_name, table_name, max(collected_at) AS last_at,
+           max(CASE WHEN NOT over_threshold THEN collected_at END) AS last_under,
+           max_by(over_threshold, collected_at) AS over_now, max_by(n_dead_tup, collected_at) AS n_dead_tup,
+           max_by(vacuum_threshold, collected_at) AS vacuum_threshold
+    FROM tbl GROUP BY endpoint_id, datname, schema_name, table_name),
+  waiting AS (
+    SELECT r.endpoint_id, r.datname, r.schema_name, r.table_name, r.last_at, r.n_dead_tup, r.vacuum_threshold,
+           (unix_timestamp(r.last_at) - unix_timestamp(min(t.collected_at))) / 3600.0 AS hours_over
+    FROM runs r JOIN tbl t ON t.endpoint_id = r.endpoint_id AND t.datname = r.datname
+      AND t.schema_name = r.schema_name AND t.table_name = r.table_name
+    WHERE r.over_now AND (r.last_under IS NULL OR t.collected_at > r.last_under)
+    GROUP BY r.endpoint_id, r.datname, r.schema_name, r.table_name, r.last_at, r.n_dead_tup, r.vacuum_threshold)
+  SELECT s.project_id, s.branch_id, s.endpoint_id,
+         w.datname || ':' || w.schema_name || '.' || w.table_name AS object, w.datname,
+         '"' || replace(w.schema_name, '"', '""') || '"."' || replace(w.table_name, '"', '""') || '"' AS table_ident,
+         w.hours_over AS measure, round(w.hours_over, 2) AS hours_over, w.n_dead_tup,
+         round(w.vacuum_threshold) AS vacuum_threshold, s.busy_workers, s.max_workers
+  FROM saturated s JOIN waiting w ON w.endpoint_id = s.endpoint_id AND w.last_at = s.latest
+fix:
+  kind: ddl
+  template: "ALTER TABLE {table_ident} SET (autovacuum_vacuum_cost_limit = 2000);"
+  rollback: "ALTER TABLE {table_ident} RESET (autovacuum_vacuum_cost_limit);"
+  risk: safe
+  reversible: true

@@ -1,6 +1,7 @@
 id: gin_cleanup_lock_wait
 title: "Writes wait for a GIN pending-list cleanup"
 category: incidents
+area: locks
 source: delta
 thresholds: {warning: 60, critical: 600}
 explain: >

@@ -1,6 +1,7 @@
 id: buffer_hit_rate
 title: "Postgres buffer cache hit rate low"
 category: capacity
+area: cache_memory
 source: delta
 direction: below
 superseded_by:   # a low LFC hit rate on the endpoint is the real cache problem; shared_buffers is only the first tier

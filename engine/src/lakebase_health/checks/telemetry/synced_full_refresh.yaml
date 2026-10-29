@@ -1,0 +1,53 @@
+id: synced_full_refresh
+title: "Synced table fully refreshed"
+category: throughput
+area: write_path
+source: delta
+thresholds: {info: 0, warning: 1}
+explain: >
+  In the last 24 h one analysis window inserted at least half of a synced table's rows (inventory_activity
+  deltas), the sign of a full refresh. A full refresh rewrites every row and index, floods WAL and evicts the
+  cache; it is a warning when it overlapped a getpage latency spike on the same endpoint (measure 2), information
+  otherwise (measure 1). The WAL in the evidence counts every role, the sync pipeline's databricks_writer_n included. Prefer triggered or continuous sync, drop unused secondary indexes from the synced
+  table's definition first, and schedule full refreshes off-peak.
+sql: |
+  WITH refresh AS (
+    SELECT project_id, branch_id, endpoint_id, datname, synced_table, collected_at, window_s, ins_delta,
+           100.0 * ins_delta / greatest(n_live_tup, 1) AS insert_pct
+    FROM lakebase_health.inventory_activity
+    WHERE collected_at >= current_timestamp() - INTERVAL 24 HOURS AND synced_table IS NOT NULL
+      AND window_s IS NOT NULL AND ins_delta > 0 AND ins_delta >= 0.5 * greatest(n_live_tup, 1)),
+  pages AS (
+    SELECT endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket, count(*) AS execs,
+           percentile_approx(neon_getpage_wait_us / 1000.0 / neon_getpage_count, 0.99) AS p99_ms
+    FROM system.lakebase.plan_history
+    WHERE ts >= current_timestamp() - INTERVAL 48 HOURS AND neon_getpage_count > 0
+    GROUP BY endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+  base AS (SELECT endpoint_id, percentile_approx(p99_ms, 0.5) AS baseline_ms FROM pages GROUP BY endpoint_id),
+  spikes AS (
+    SELECT p.endpoint_id, p.bucket FROM pages p JOIN base b ON b.endpoint_id = p.endpoint_id
+    WHERE p.execs >= 5 AND p.p99_ms > 5 * b.baseline_ms AND p.p99_ms > 20),
+  wal AS (
+    SELECT endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300) AS bucket,
+           sum(wal_bytes) AS wal_bytes, sum(wal_fpi) AS wal_fpi
+    FROM system.lakebase.pg_stat_statements_counters WHERE ts >= current_timestamp() - INTERVAL 25 HOURS
+    GROUP BY endpoint_id, timestamp_seconds(floor(unix_timestamp(ts) / 300) * 300)),
+  windows AS (
+    SELECT r.*, timestamp_seconds(unix_timestamp(r.collected_at) - r.window_s) AS window_start FROM refresh r),
+  agg AS (
+    SELECT w.project_id, w.branch_id, w.endpoint_id, w.datname, w.synced_table,
+           max(CASE WHEN s.bucket IS NOT NULL THEN 1 ELSE 0 END) AS overlapped,
+           round(max(w.insert_pct), 1) AS insert_pct, max(w.ins_delta) AS rows_inserted,
+           min(w.window_start) AS first_start, max(w.collected_at) AS seen_at,
+           count(DISTINCT s.bucket) AS getpage_spike_buckets
+    FROM windows w
+    LEFT JOIN spikes s ON s.endpoint_id = w.endpoint_id AND s.bucket >= w.window_start AND s.bucket <= w.collected_at
+    GROUP BY w.project_id, w.branch_id, w.endpoint_id, w.datname, w.synced_table)
+  SELECT a.project_id, a.branch_id, a.endpoint_id, a.datname || ':' || a.synced_table AS object, a.datname,
+         a.synced_table, CASE WHEN a.overlapped = 1 THEN 2.0 ELSE 1.0 END AS measure, a.insert_pct,
+         a.rows_inserted, a.seen_at, a.getpage_spike_buckets, sum(x.wal_bytes) AS wal_bytes, sum(x.wal_fpi) AS wal_fpi
+  FROM agg a
+  LEFT JOIN wal x ON x.endpoint_id = a.endpoint_id AND x.bucket >= a.first_start AND x.bucket <= a.seen_at
+  GROUP BY a.project_id, a.branch_id, a.endpoint_id, a.datname, a.synced_table, a.overlapped, a.insert_pct,
+           a.rows_inserted, a.seen_at, a.getpage_spike_buckets
+fix: {kind: manual, template: "Switch {synced_table} to triggered or continuous sync, drop unused secondary indexes from its definition before the next refresh, and schedule full refreshes off-peak.", risk: moderate}

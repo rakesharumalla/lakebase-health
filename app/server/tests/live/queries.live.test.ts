@@ -80,6 +80,25 @@ describe.runIf(live)("queries on my-profile", () => {
     expect(Object.keys(grouped[0])).toEqual(expect.arrayContaining(["queryid", "top_queryids", "db_ms"]));
   }, 120_000);
 
+  it("report queries run on healthcheck's default branch within 5 s each", async () => {
+    const { rows: br } = await timed("report_branches", { project_id: HC });
+    const prod = br.find((r) => r.is_default_branch === true || r.is_default_branch === "true");
+    expect(prod).toBeDefined();
+    const branch = String(prod?.branch_id);
+    const ep = String(br.find((r) => r.branch_id === branch && String(r.endpoint_type).endsWith("READ_WRITE"))?.endpoint_id);
+    for (const name of ["report_findings", "report_actions", "report_checks"]) {
+      const { ms } = await timed(name, { project_id: HC, branch_id: branch });
+      expect(ms, name).toBeLessThan(5000);
+    }
+    const panels = ["report_overview", "report_databases", "report_tables", "report_indexes", "report_statements",
+      "report_settings", "report_io", "report_endpoint", "report_series", "report_waits"];
+    for (const name of panels) {
+      const { rows, ms } = await timed(name, { project_id: HC, branch_id: branch, endpoint_id: ep });
+      expect(ms, name).toBeLessThan(5000);
+      if (name === "report_overview") expect(rows).toHaveLength(1);
+    }
+  }, 300_000);
+
   it("returns nothing for a project outside the allow-list", async () => {
     const rows = await runner.run("project_findings", ["00000000-0000-0000-0000-000000000000"], { project_id: HC });
     expect(rows).toEqual([]);

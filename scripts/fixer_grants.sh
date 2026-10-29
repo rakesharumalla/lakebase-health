@@ -35,6 +35,7 @@ for t in proposed_actions action_runs ledger shadow_log drafts llm_calls llm_sta
   q "GRANT MODIFY ON TABLE $CATALOG.lakebase_health.$t TO \`$FIXER_SP\`"
 done
 q "GRANT MODIFY ON TABLE $CATALOG.lakebase_health.approvals TO \`$APP_SP\`"
+q "GRANT MODIFY ON TABLE $CATALOG.lakebase_health.audit_events TO \`$APP_SP\`"  # one row per report download
 # The bundle target to grant for (the CLI's own default is dev). The fixer job is the one this target deployed:
 # its ID from `bundle summary`, never a name match, which could pick another target's job in the same workspace.
 TARGET="${DATABRICKS_BUNDLE_TARGET:-dev}"

@@ -1,0 +1,40 @@
+id: suspend_blockers
+title: "Idle clients keep the compute from scaling to zero"
+category: connectivity
+area: scale_to_zero
+source: postgres
+per_database: false   # pg_stat_activity is instance-wide
+thresholds: {warning: 0}
+explain: >
+  Scale to zero is on, the compute has not suspended for 24 h (Postgres started more than 24 h ago), and yet it
+  has been otherwise idle: no client is running a query or holding a transaction, and no client query finished
+  within the suspend timeout. Only then do open idle connections explain why it stays awake. A busy compute with a
+  connection pool is not reported: it is awake because of its traffic, and closing idle connections would not let
+  it suspend. A Postgres check cannot read CPU; no client query for longer than the suspend timeout stands in for
+  low CPU, because client queries are what keep it busy. Our own sessions and platform polling
+  (databricks_monitor, databricks_control_plane) do not count as activity. One result per role and application
+  with session counts, never process ids. Set the pool's minimum idle connections to 0 or close idle connections
+  in the client, and stop agents that poll the database.
+sql: |
+  SELECT coalesce(nullif(a.application_name, ''), '(no application_name)') || ' as ' || a.usename AS object,
+         a.usename AS role, nullif(a.application_name, '') AS application_name,
+         count(*)::float8 AS measure, count(*) AS idle_sessions,
+         round(max(extract(epoch FROM now() - a.state_change)))::bigint AS max_idle_s,
+         round(min(extract(epoch FROM now() - a.state_change)))::bigint AS last_client_query_s,
+         {suspend_timeout_s} AS suspend_timeout_s,
+         round(extract(epoch FROM now() - pg_postmaster_start_time()) / 3600.0)::bigint AS hours_since_start
+  FROM pg_stat_activity a
+  WHERE a.backend_type = 'client backend' AND a.state = 'idle' AND a.pid <> pg_backend_pid()
+    AND now() - a.state_change > make_interval(secs => {suspend_timeout_s})
+    AND now() - pg_postmaster_start_time() > interval '24 hours'
+    AND a.usename NOT IN {excluded_users} AND a.usename NOT IN ('databricks_control_plane', 'databricks_monitor')
+    AND coalesce(a.application_name, '') NOT IN ('lakebase-health', 'lakebase-health-fixer')
+    -- the compute is otherwise idle: no client is busy now, and none ran a query within the suspend timeout
+    AND NOT EXISTS (
+      SELECT 1 FROM pg_stat_activity b
+      WHERE b.backend_type = 'client backend' AND b.pid <> pg_backend_pid()
+        AND b.usename NOT IN {excluded_users} AND b.usename NOT IN ('databricks_control_plane', 'databricks_monitor')
+        AND coalesce(b.application_name, '') NOT IN ('lakebase-health', 'lakebase-health-fixer')
+        AND (b.state IS DISTINCT FROM 'idle' OR now() - b.state_change <= make_interval(secs => {suspend_timeout_s})))
+  GROUP BY a.usename, a.application_name
+fix: {kind: manual, template: "Set the minimum idle connections of the pool behind {object} to 0 (or close idle connections) and stop agents that poll the database; the compute can then suspend after {suspend_timeout_s} s idle.", risk: safe}

@@ -1,6 +1,7 @@
 id: postgres_errors
 title: "Infrastructure-level Postgres errors"
 category: incidents
+area: queries
 source: delta
 thresholds: {warning: 0, critical: 10}
 explain: >
